@@ -64,3 +64,4 @@ specs/          → Feature specifications & ADRs
 
 See [ADR-001](specs/architecture/decisions/001-architecture-overview.md) for full architecture details.
 test
+test
