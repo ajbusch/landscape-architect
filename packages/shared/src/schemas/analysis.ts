@@ -15,7 +15,7 @@ export const SunExposureSchema = z.enum(['full_sun', 'partial_shade', 'full_shad
  * A landscape feature identified by AI in the uploaded photo.
  */
 export const IdentifiedFeatureSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   type: z.enum([
     'tree',
     'shrub',
@@ -65,10 +65,10 @@ export const RecommendationCategorySchema = z.enum([
  * A single plant recommendation from the AI analysis.
  */
 export const PlantRecommendationSchema = z.object({
-  plantId: z.string().uuid(),
+  plantId: z.uuid(),
   commonName: z.string().min(1).max(100),
   scientificName: z.string().min(1).max(150),
-  photoUrl: z.string().url().optional(),
+  photoUrl: z.url().optional(),
   reason: z.string().min(1).max(500),
   category: RecommendationCategorySchema,
   light: SunExposureSchema,
@@ -106,17 +106,17 @@ export type AnalysisResult = z.infer<typeof AnalysisResultSchema>;
  * Full analysis response returned by the API.
  */
 export const AnalysisResponseSchema = z.object({
-  id: z.string().uuid(),
-  userId: z.string().uuid().optional(),
-  photoUrl: z.string().url(),
+  id: z.uuid(),
+  userId: z.uuid().optional(),
+  photoUrl: z.url(),
   address: z.object({
     zipCode: z.string(),
     zone: USDAZoneSchema,
   }),
   result: AnalysisResultSchema,
   tier: z.enum(['free', 'premium']),
-  createdAt: z.string().datetime(),
-  expiresAt: z.string().datetime().optional(),
+  createdAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime().optional(),
 });
 
 export type AnalysisResponse = z.infer<typeof AnalysisResponseSchema>;

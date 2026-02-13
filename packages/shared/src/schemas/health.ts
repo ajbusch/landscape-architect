@@ -6,7 +6,7 @@ import { z } from 'zod';
  */
 export const HealthResponseSchema = z.object({
   status: z.enum(['healthy', 'degraded', 'unhealthy']),
-  timestamp: z.string().datetime(),
+  timestamp: z.iso.datetime(),
   version: z.string().min(1),
 });
 
