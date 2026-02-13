@@ -19,14 +19,18 @@
     "test:coverage-check": "turbo test:coverage-check",
     "clean": "turbo clean",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "lint:secrets": "secretlint \"**/*\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@secretlint/secretlint-rule-preset-recommend": "^9.3.2",
     "@types/node": "^25.2.3",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-security": "^3.0.1",
     "prettier": "^3.8.1",
+    "secretlint": "^9.3.2",
     "turbo": "^2.8.7",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.55.0"

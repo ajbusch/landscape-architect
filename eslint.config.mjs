@@ -1,11 +1,13 @@
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
+import security from "eslint-plugin-security";
 
 export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
+  security.configs.recommended,
   prettier,
   {
     languageOptions: {
