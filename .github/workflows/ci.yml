@@ -29,10 +29,6 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
-      - name: Security audit
-        run: pnpm audit --audit-level=high
-        continue-on-error: true
-
   test-unit:
     name: Unit & Contract Tests
     runs-on: ubuntu-latest
@@ -71,10 +67,23 @@ jobs:
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/testdb
 
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Security audit
+        run: pnpm audit --audit-level=high
+
+      - name: Secret detection
+        run: pnpm lint:secrets
+
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [quality, test-unit]
+    needs: [quality, test-unit, security]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
