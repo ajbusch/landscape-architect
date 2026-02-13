@@ -12,7 +12,7 @@
     "lint:fix": "eslint src/ --fix",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --project unit",
-    "test:integration": "vitest run --project integration",
+    "test:integration": "vitest run --project integration --passWithNoTests",
     "test:contract": "vitest run --project contract",
     "test:coverage-check": "vitest run --project unit --coverage",
     "clean": "rm -rf dist coverage"

@@ -9,7 +9,9 @@ describe('App', () => {
 
   it('renders the heading', () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ status: 'healthy', timestamp: '2025-01-01T00:00:00Z', version: '0.0.1' })),
+      new Response(
+        JSON.stringify({ status: 'healthy', timestamp: '2025-01-01T00:00:00Z', version: '0.0.1' }),
+      ),
     );
 
     render(<App />);
@@ -18,7 +20,9 @@ describe('App', () => {
 
   it('displays health status after fetch', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ status: 'healthy', timestamp: '2025-01-01T00:00:00Z', version: '0.0.1' })),
+      new Response(
+        JSON.stringify({ status: 'healthy', timestamp: '2025-01-01T00:00:00Z', version: '0.0.1' }),
+      ),
     );
 
     render(<App />);

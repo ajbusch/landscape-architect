@@ -15,11 +15,7 @@ export const AddressInputSchema = z.object({
   zipCode: ZipCodeSchema,
   streetAddress: z.string().max(255).optional(),
   city: z.string().max(100).optional(),
-  state: z
-    .string()
-    .length(2, 'Use 2-letter state abbreviation')
-    .toUpperCase()
-    .optional(),
+  state: z.string().length(2, 'Use 2-letter state abbreviation').toUpperCase().optional(),
 });
 
 export type AddressInput = z.infer<typeof AddressInputSchema>;

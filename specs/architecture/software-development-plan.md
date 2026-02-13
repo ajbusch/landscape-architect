@@ -122,14 +122,14 @@ Every feature follows this lifecycle:
 SPEC → REVIEW → TESTS (red) → IMPLEMENT (green) → REFACTOR → DEPLOY
 ```
 
-| Phase | Artifact | Owner |
-|-------|----------|-------|
-| 1. Spec | Markdown spec document in `specs/` | Product + Engineering |
-| 2. Schema | Zod schema in `packages/shared` | Engineering |
-| 3. Contract | OpenAPI spec (auto-generated or hand-written) | Engineering |
-| 4. Tests | Failing tests derived from spec | Engineering |
-| 5. Implementation | Code to make tests pass | Engineering |
-| 6. Acceptance | E2E tests matching spec acceptance criteria | QA + Engineering |
+| Phase             | Artifact                                      | Owner                 |
+| ----------------- | --------------------------------------------- | --------------------- |
+| 1. Spec           | Markdown spec document in `specs/`            | Product + Engineering |
+| 2. Schema         | Zod schema in `packages/shared`               | Engineering           |
+| 3. Contract       | OpenAPI spec (auto-generated or hand-written) | Engineering           |
+| 4. Tests          | Failing tests derived from spec               | Engineering           |
+| 5. Implementation | Code to make tests pass                       | Engineering           |
+| 6. Acceptance     | E2E tests matching spec acceptance criteria   | QA + Engineering      |
 
 ### 3.2 Specification Template
 
@@ -141,38 +141,47 @@ Every feature spec in `specs/` follows this structure:
 ## Status: [Draft | In Review | Approved | Implemented]
 
 ## Context
+
 Why this feature exists. Link to ADR if architectural decisions are involved.
 
 ## Requirements
+
 ### Functional
+
 - FR-001: The system SHALL [do X] WHEN [condition Y]
 - FR-002: The system SHALL NOT [do Z] UNLESS [condition W]
 
 ### Non-Functional
+
 - NFR-001: Response time < 200ms at p95
 - NFR-002: Availability >= 99.9%
 
 ## API Contract
+
 - Endpoint: `POST /api/v1/resources`
 - Request schema: `CreateResourceSchema` (ref: packages/shared/schemas)
 - Response schema: `ResourceResponseSchema`
 - Error cases: 400 (validation), 401 (auth), 409 (conflict), 500
 
 ## Acceptance Criteria
+
 Given [precondition]
 When [action]
 Then [expected result]
 
 ## Edge Cases & Error Scenarios
+
 - What happens when [boundary condition]?
 - What happens when [dependency fails]?
 
 ## Security Considerations
+
 - Authentication required: Yes/No
 - Authorization model: [RBAC/ABAC/resource-owner]
 - Input validation: [reference Zod schema]
 
 ## Open Questions
+
 - [ ] TBD items
 ```
 
@@ -246,14 +255,14 @@ Scope: Verify synthesized CloudFormation templates are correct.
 
 ### 4.3 Test Coverage Requirements
 
-| Layer | Minimum Coverage | Enforced By |
-|-------|-----------------|-------------|
-| `packages/shared` | 95% statements | CI gate |
-| `apps/api/services` | 90% branches | CI gate |
-| `apps/api/handlers` | 85% statements | CI gate |
-| `apps/web/hooks` | 85% statements | CI gate |
-| `apps/web/components` | 70% statements | CI warning |
-| `infra/` | 100% of stacks have assertion tests | CI gate |
+| Layer                 | Minimum Coverage                    | Enforced By |
+| --------------------- | ----------------------------------- | ----------- |
+| `packages/shared`     | 95% statements                      | CI gate     |
+| `apps/api/services`   | 90% branches                        | CI gate     |
+| `apps/api/handlers`   | 85% statements                      | CI gate     |
+| `apps/web/hooks`      | 85% statements                      | CI gate     |
+| `apps/web/components` | 70% statements                      | CI warning  |
+| `infra/`              | 100% of stacks have assertion tests | CI gate     |
 
 ### 4.4 Quality Gates (all enforced in CI)
 
@@ -303,15 +312,15 @@ Scope: Verify synthesized CloudFormation templates are correct.
 
 ### 5.2 CDK Stack Breakdown
 
-| Stack | Resources | Dependencies |
-|-------|-----------|-------------|
-| `NetworkStack` | VPC, subnets, security groups, NAT Gateway | None |
-| `DatabaseStack` | RDS PostgreSQL, secrets | NetworkStack |
-| `AuthStack` | Cognito User Pool, app clients, custom domain | None |
-| `ApiStack` | Lambda, API Gateway v2, CloudFront distribution | NetworkStack, DatabaseStack, AuthStack |
-| `FrontendStack` | S3 bucket, CloudFront distribution, OAC | None |
-| `MonitoringStack` | CloudWatch dashboards, alarms, SNS topics | ApiStack, DatabaseStack |
-| `GitHubOidcStack` | OIDC provider, IAM deploy roles (per env) | None (bootstrapped first) |
+| Stack             | Resources                                       | Dependencies                           |
+| ----------------- | ----------------------------------------------- | -------------------------------------- |
+| `NetworkStack`    | VPC, subnets, security groups, NAT Gateway      | None                                   |
+| `DatabaseStack`   | RDS PostgreSQL, secrets                         | NetworkStack                           |
+| `AuthStack`       | Cognito User Pool, app clients, custom domain   | None                                   |
+| `ApiStack`        | Lambda, API Gateway v2, CloudFront distribution | NetworkStack, DatabaseStack, AuthStack |
+| `FrontendStack`   | S3 bucket, CloudFront distribution, OAC         | None                                   |
+| `MonitoringStack` | CloudWatch dashboards, alarms, SNS topics       | ApiStack, DatabaseStack                |
+| `GitHubOidcStack` | OIDC provider, IAM deploy roles (per env)       | None (bootstrapped first)              |
 
 ### 5.3 Environment Strategy
 
@@ -324,9 +333,11 @@ Each environment is a separate AWS account (AWS Organizations) with identical in
 ### 6.1 Pipeline Architecture
 
 **PR Validation (ci.yml):**
+
 - Lint, Typecheck, Unit Tests, Integration Tests, CDK Diff, Contract Tests, Bundle Size Check, Security Audit
 
 **Deploy (deploy.yml):**
+
 - Build & Test → Deploy Dev (+ smoke test) → Deploy Staging (+ E2E + smoke test) → Deploy Production (manual approval + canary + smoke)
 
 ### 6.2 OIDC Authentication
@@ -374,22 +385,22 @@ All development happens inside WSL (Ubuntu). Files live on the Linux filesystem 
 
 ## 8. Recommended Technology Choices
 
-| Concern | Choice | Rationale |
-|---------|--------|-----------|
-| Monorepo | Turborepo + pnpm | Fast builds, native TS workspace support |
-| SPA Framework | React 19 + Vite | Mature ecosystem, fast HMR |
-| API Framework | Fastify | TypeScript-first, excellent perf, built-in validation hooks |
-| Validation | Zod | Runtime + type inference, shared FE/BE |
-| Database | PostgreSQL (RDS) | Relational, mature, great with TypeScript ORMs |
-| ORM | Drizzle ORM | Type-safe, lightweight, great migration story |
-| Auth | AWS Cognito + JWT | Managed, integrates with API Gateway |
-| Unit/Integration Tests | Vitest | Fast, native ESM + TypeScript, Vite-compatible |
-| E2E Tests | Playwright | Cross-browser, excellent DX, CI-friendly |
-| Contract Tests | openapi-response-validator | Validates responses against OpenAPI spec |
-| IaC | AWS CDK (TypeScript) | Same language, L3 constructs |
-| CI/CD | GitHub Actions | OIDC to AWS, matrix builds, environment approvals |
-| Linting | ESLint flat config + Prettier | Industry standard |
-| API Spec | OpenAPI 3.1 | Codegen, documentation, contract testing |
+| Concern                | Choice                        | Rationale                                                   |
+| ---------------------- | ----------------------------- | ----------------------------------------------------------- |
+| Monorepo               | Turborepo + pnpm              | Fast builds, native TS workspace support                    |
+| SPA Framework          | React 19 + Vite               | Mature ecosystem, fast HMR                                  |
+| API Framework          | Fastify                       | TypeScript-first, excellent perf, built-in validation hooks |
+| Validation             | Zod                           | Runtime + type inference, shared FE/BE                      |
+| Database               | PostgreSQL (RDS)              | Relational, mature, great with TypeScript ORMs              |
+| ORM                    | Drizzle ORM                   | Type-safe, lightweight, great migration story               |
+| Auth                   | AWS Cognito + JWT             | Managed, integrates with API Gateway                        |
+| Unit/Integration Tests | Vitest                        | Fast, native ESM + TypeScript, Vite-compatible              |
+| E2E Tests              | Playwright                    | Cross-browser, excellent DX, CI-friendly                    |
+| Contract Tests         | openapi-response-validator    | Validates responses against OpenAPI spec                    |
+| IaC                    | AWS CDK (TypeScript)          | Same language, L3 constructs                                |
+| CI/CD                  | GitHub Actions                | OIDC to AWS, matrix builds, environment approvals           |
+| Linting                | ESLint flat config + Prettier | Industry standard                                           |
+| API Spec               | OpenAPI 3.1                   | Codegen, documentation, contract testing                    |
 
 ---
 

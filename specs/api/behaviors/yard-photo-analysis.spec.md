@@ -1,9 +1,11 @@
 # Feature: Yard Photo Analysis
 
 ## Status
+
 Draft
 
 ## Context
+
 This is the primary onboarding experience for Landscape Architect. A homeowner uploads a photo of their yard, provides their address (to determine USDA hardiness zone), and receives AI-powered analysis including identification of existing features, soil/sun assessments, and personalized plant recommendations.
 
 This feature is the "wow moment" that converts visitors to users. It must feel fast, insightful, and immediately useful.
@@ -17,12 +19,14 @@ Related: ADR-001 (Architecture Overview)
 ### Functional
 
 **Photo Upload**
+
 - FR-001: The system SHALL accept photo uploads in JPEG, PNG, and HEIC formats up to 20MB
 - FR-002: The system SHALL display a preview of the uploaded photo before analysis begins
 - FR-003: The system SHALL reject files that are not valid images and display a clear error message
 - FR-004: The system SHALL support uploading from camera roll (mobile) and file picker (desktop)
 
 **Address & Zone Resolution**
+
 - FR-010: The system SHALL accept a US street address or ZIP code from the user
 - FR-011: The system SHALL resolve the address to a USDA Plant Hardiness Zone (1a–13b)
 - FR-012: The system SHALL display the resolved zone to the user with a brief explanation (e.g., "Zone 7b — Average minimum temperature: 5°F to 10°F")
@@ -30,6 +34,7 @@ Related: ADR-001 (Architecture Overview)
 - FR-014: The system SHALL reject non-US addresses with a message indicating US-only support
 
 **AI Analysis**
+
 - FR-020: The system SHALL analyze the uploaded photo and identify visible landscape features including:
   - Existing plants (trees, shrubs, flowers, grass) with estimated species when possible
   - Hardscape elements (patios, walkways, fences, walls, decks)
@@ -62,18 +67,21 @@ Related: ADR-001 (Architecture Overview)
   - "Problem Solvers" — plants that address identified issues (erosion, privacy, shade)
 
 **Results Display**
+
 - FR-030: The system SHALL display analysis results on a dedicated results page
 - FR-031: The system SHALL overlay identified features on the original photo as labeled regions
 - FR-032: The system SHALL allow the user to save their analysis to their account (requires sign-up)
 - FR-033: The system SHALL allow the user to start a new analysis
 
 **Freemium Gating**
+
 - FR-040: Free users SHALL receive 1 analysis per account with up to 5 plant recommendations
 - FR-041: Premium users SHALL receive unlimited analyses with up to 10 recommendations per analysis, plus detailed care guides for each recommended plant
 - FR-042: The system SHALL display a clear upgrade prompt when free limits are reached
 - FR-043: The system SHALL allow unauthenticated users to perform 1 analysis (results are ephemeral unless they sign up)
 
 ### Non-Functional
+
 - NFR-001: Photo upload SHALL complete in < 3 seconds on a 10Mbps connection
 - NFR-002: AI analysis SHALL return results in < 30 seconds
 - NFR-003: AI analysis SHALL show a progress indicator with status updates (e.g., "Analyzing photo...", "Identifying plants...", "Generating recommendations...")
@@ -230,18 +238,21 @@ Scenario: Free user tries a second analysis
 ## Technical Notes
 
 ### AI Integration
+
 - Use Claude's vision capabilities (Anthropic API) for photo analysis
 - System prompt defines the analysis structure and plant recommendation format
 - Response is parsed and validated against `AnalysisResultSchema` before storage
 - Fallback: If structured parsing fails, retry once with a more explicit prompt
 
 ### USDA Zone Data
+
 - Static dataset: ZIP code → zone mapping (~42,000 entries)
 - Source: USDA Plant Hardiness Zone Map (2023 revision)
 - Stored as a lookup table in the database, cached aggressively (zones don't change often)
 - Consider bundling as a static JSON file for the zone lookup endpoint
 
 ### Plant Database
+
 - Seed with ~500 common landscape plants for US zones 3–10
 - Each plant tagged with: zones, light, water, soil, size, bloom season, cost, difficulty
 - This is a prerequisite for this feature — the recommendations reference plants from this database
@@ -250,6 +261,7 @@ Scenario: Free user tries a second analysis
 ---
 
 ## Dependencies
+
 - Plant database must exist (at least a seed dataset) before recommendations work
 - USDA zone lookup data must be loaded
 - S3 bucket for photo storage (part of CDK infra)
@@ -258,6 +270,7 @@ Scenario: Free user tries a second analysis
 ---
 
 ## Open Questions
+
 - [ ] Should we support multiple photos per analysis (front yard + back yard)?
 - [ ] Should we offer a "virtual staging" view that shows recommended plants composited onto the photo? (likely premium feature, future phase)
 - [ ] What is the premium pricing? ($X/month or $X/year)
