@@ -5,7 +5,7 @@ import { NetworkStack } from '../lib/stacks/network-stack.js';
 
 const app = new App();
 
-const stage = app.node.tryGetContext('stage') as string ?? 'dev';
+const stage = (app.node.tryGetContext('stage') as string | undefined) ?? 'dev';
 
 new NetworkStack(app, `LandscapeArchitect-Network-${stage}`, {
   stage,

@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { App } from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { NetworkStack } from '../../lib/stacks/network-stack.js';
 
 describe('NetworkStack', () => {
-  const app = new App();
-
   describe('dev stage', () => {
+    const app = new App();
     const stack = new NetworkStack(app, 'TestNetworkDev', {
       stage: 'dev',
       env: { account: '111111111111', region: 'us-east-1' },
@@ -23,15 +22,16 @@ describe('NetworkStack', () => {
 
     it('tags resources with project and stage', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: expect.arrayContaining([
-          expect.objectContaining({ Key: 'Project', Value: 'LandscapeArchitect' }),
-          expect.objectContaining({ Key: 'Stage', Value: 'dev' }),
+        Tags: Match.arrayWith([
+          Match.objectLike({ Key: 'Project', Value: 'LandscapeArchitect' }),
+          Match.objectLike({ Key: 'Stage', Value: 'dev' }),
         ]),
       });
     });
   });
 
   describe('prod stage', () => {
+    const app = new App();
     const stack = new NetworkStack(app, 'TestNetworkProd', {
       stage: 'prod',
       env: { account: '333333333333', region: 'us-east-1' },
