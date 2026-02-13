@@ -6,11 +6,11 @@ import { SunExposureSchema, DifficultySchema, CostRangeSchema } from './analysis
  * A plant in the database — the source of truth for all recommendations.
  */
 export const PlantSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   commonName: z.string().min(1).max(100),
   scientificName: z.string().min(1).max(150),
   description: z.string().max(2000),
-  photoUrl: z.string().url().optional(),
+  photoUrl: z.url().optional(),
 
   // Growing conditions
   light: z.array(SunExposureSchema).min(1),
@@ -42,8 +42,8 @@ export const PlantSchema = z.object({
 
   // Metadata
   tags: z.array(z.string().max(50)).max(20),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
 });
 
 export type Plant = z.infer<typeof PlantSchema>;
