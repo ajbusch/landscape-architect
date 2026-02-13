@@ -19,7 +19,8 @@ const validRecommendation = {
   plantId: '550e8400-e29b-41d4-a716-446655440001',
   commonName: 'Eastern Redbud',
   scientificName: 'Cercis canadensis',
-  reason: 'A beautiful understory tree that thrives in the partial shade beneath your existing oak.',
+  reason:
+    'A beautiful understory tree that thrives in the partial shade beneath your existing oak.',
   category: 'foundation_plant' as const,
   light: 'partial_shade' as const,
   waterNeeds: 'moderate' as const,

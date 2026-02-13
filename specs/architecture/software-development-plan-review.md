@@ -1,6 +1,7 @@
 # Software Development Plan — Evaluation & Suggested Changes
 
 ## Review Date: 2026-02-13
+
 ## Reviewer: Claude (automated evaluation against existing codebase)
 
 ---
@@ -27,6 +28,7 @@ The plan is **well-aligned** with the existing codebase. Most of the foundation 
 ### 1.2 API Directory Structure: `handlers/` and `validators/` don't exist
 
 **Spec proposes:**
+
 ```
 api/src/
 ├── routes/
@@ -39,6 +41,7 @@ api/src/
 ```
 
 **Reality:** The API currently has:
+
 ```
 api/src/
 ├── routes/         # health.ts (route + handler inline)
@@ -47,10 +50,12 @@ api/src/
 ```
 
 **Issues:**
+
 - The `validators/` directory is misleading. Zod schemas live in `packages/shared/src/schemas/`, not in the API. The spec's own Section 3.3 correctly states schemas are in `packages/shared`. Having a `validators/` directory in the API contradicts the "single source of truth" principle.
 - `handlers/` vs `routes/`: Fastify's idiomatic pattern uses route plugins that combine route definition + handler. Splitting into separate `routes/` and `handlers/` directories adds unnecessary indirection for a Fastify app. The current pattern (handler code inside route files) is Fastify-standard.
 
 **Suggested fix:**
+
 ```
 api/src/
 ├── routes/         # Fastify route plugins (route + handler together)
@@ -89,22 +94,23 @@ Remove `validators/` entirely. Remove `handlers/` — keep handler logic in rout
 
 The plan lists Phase 0 as "Week 1–2" future work, but **nearly everything in Phase 0 is already implemented:**
 
-| Phase 0 Item | Status |
-|---|---|
-| WSL environment setup | Done (implied by working repo) |
-| Initialize repo | Done |
-| `.gitattributes`, `.editorconfig`, `.nvmrc` | Done |
-| Monorepo (Turborepo + pnpm) | Done |
-| TypeScript strict mode | Done |
-| ESLint + Prettier | Done |
-| CDK app with NetworkStack | Done |
-| GitHubOidcStack | **NOT done** — OIDC config is in deploy.yml but no CDK stack exists |
-| AWS accounts (dev/staging/prod) | Unknown — deploy.yml references environments but no evidence of multi-account |
-| GitHub repo: branch protection, environments, OIDC | Partially done (workflows exist, environments referenced) |
-| CI workflow | Done |
-| ADR-001 | Done |
+| Phase 0 Item                                       | Status                                                                        |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| WSL environment setup                              | Done (implied by working repo)                                                |
+| Initialize repo                                    | Done                                                                          |
+| `.gitattributes`, `.editorconfig`, `.nvmrc`        | Done                                                                          |
+| Monorepo (Turborepo + pnpm)                        | Done                                                                          |
+| TypeScript strict mode                             | Done                                                                          |
+| ESLint + Prettier                                  | Done                                                                          |
+| CDK app with NetworkStack                          | Done                                                                          |
+| GitHubOidcStack                                    | **NOT done** — OIDC config is in deploy.yml but no CDK stack exists           |
+| AWS accounts (dev/staging/prod)                    | Unknown — deploy.yml references environments but no evidence of multi-account |
+| GitHub repo: branch protection, environments, OIDC | Partially done (workflows exist, environments referenced)                     |
+| CI workflow                                        | Done                                                                          |
+| ADR-001                                            | Done                                                                          |
 
 **Fix:** Update Phase 0 to reflect current status. Mark completed items. The remaining Phase 0 work is:
+
 - GitHubOidcStack (CDK stack for OIDC provider — or document that this was done manually)
 - AWS account setup verification
 - GitHub environment protection rules configuration
@@ -117,6 +123,7 @@ The plan lists Phase 0 as "Week 1–2" future work, but **nearly everything in P
 **Reality:** `001-architecture-overview.md` already exists.
 
 **Fix:** Renumber to avoid collision:
+
 - `001-architecture-overview.md` (exists)
 - `002-orm-choice.md` (pending)
 - `003-auth-strategy.md` (pending)
@@ -126,6 +133,7 @@ The plan lists Phase 0 as "Week 1–2" future work, but **nearly everything in P
 ### 1.7 Existing Feature Work Not Acknowledged
 
 The plan makes no mention of the **yard-photo-analysis feature** which already has:
+
 - A detailed spec: `specs/api/behaviors/yard-photo-analysis.spec.md` (43 functional requirements)
 - Full Zod schemas: `zone.ts`, `plant.ts`, `analysis.ts` in `packages/shared`
 - A comprehensive security spec: `specs/security/security-spec.md`
@@ -139,6 +147,7 @@ The plan makes no mention of the **yard-photo-analysis feature** which already h
 ### 2.1 Missing: `packages/shared` already has domain schemas
 
 The plan's example schemas (`CreateResourceSchema`, `ResourceResponseSchema`) are generic placeholders. The real codebase has rich domain schemas:
+
 - `HealthResponseSchema` — health check
 - `ZipCodeSchema`, `AddressInputSchema`, `USDAZoneSchema`, `ZoneResponseSchema` — location/zone
 - `PlantSchema`, `PlantSearchParamsSchema` — plant database
@@ -154,6 +163,7 @@ The plan's example schemas (`CreateResourceSchema`, `ResourceResponseSchema`) ar
 The codebase has `secretlint` configured with its own ignore file and CI integration, but the plan's Quality Gates section (4.4) doesn't mention secret scanning.
 
 **Fix:** Add to Section 4.4:
+
 - **Secret scanning**: `secretlint` — zero findings policy
 
 ---
@@ -177,6 +187,7 @@ The codebase has `.github/dependabot.yml` configured for weekly npm and GitHub A
 ### 2.5 OpenAPI Spec: Proposed but no strategy for generation
 
 The plan references `specs/api/openapi.yaml` and contract tests validating against it, but doesn't specify:
+
 - Will the OpenAPI spec be hand-written or generated from Zod schemas?
 - How will it stay in sync with `packages/shared` schemas?
 - Which tool generates it? (e.g., `zod-to-openapi`, `fastify-swagger`)
@@ -196,6 +207,7 @@ The plan doesn't mention that `apps/api` already uses Vitest's multi-project fea
 ### 2.7 Lambda as compute: Not yet decided
 
 The architecture diagram shows Lambda as the API compute, but:
+
 - No Lambda-related dependencies exist in `apps/api`
 - The current API is a long-running Fastify server (`app.listen()`)
 - No adapter (e.g., `@fastify/aws-lambda`) is installed
@@ -219,6 +231,7 @@ Section 2 lists `store/` directory for state management but Section 8 doesn't re
 ### 3.1 Existing CI is more nuanced than the plan describes
 
 The actual `ci.yml` has:
+
 - Separate `quality`, `test-unit`, `test-integration`, `security`, and `build` jobs
 - The `security` job runs both `npm audit` AND `secretlint`
 - The `build` job depends on `quality`, `test-unit`, and `security` (not test-integration)
@@ -261,6 +274,7 @@ The plan assumes 3 separate AWS accounts (dev/staging/prod) via AWS Organization
 ### 4.1 Security Spec Integration
 
 A comprehensive security spec already exists at `specs/security/security-spec.md`. The dev plan should reference it and align implementation phases with the security roadmap. For example:
+
 - Phase 1 should include: Cognito auth, authorization middleware, CORS allowlist
 - Phase 3 should include: WAF rules, Secrets Manager, CDK security assertion tests, pino PII redaction
 
@@ -269,6 +283,7 @@ A comprehensive security spec already exists at `specs/security/security-spec.md
 ### 4.2 AI/LLM Integration Strategy
 
 The yard-photo-analysis feature depends on the Anthropic API for AI-powered analysis. The plan should address:
+
 - API key management (Secrets Manager)
 - Cost controls and rate limiting
 - Output validation (AnalysisResultSchema already exists)
@@ -280,6 +295,7 @@ The yard-photo-analysis feature depends on the Anthropic API for AI-powered anal
 ### 4.3 Database Migration Strategy
 
 The plan mentions "forward-only migrations" (Principle 7) but doesn't specify:
+
 - Migration tool (Drizzle Kit if using Drizzle ORM, or standalone like `node-pg-migrate`)
 - Migration file location
 - How migrations run in CI and deployment
@@ -290,6 +306,7 @@ The plan mentions "forward-only migrations" (Principle 7) but doesn't specify:
 ### 4.4 Error Handling Strategy
 
 No consistent error handling approach is specified:
+
 - Fastify error handler setup
 - Standardized error response format (should be a Zod schema in shared)
 - Error codes taxonomy
@@ -306,6 +323,7 @@ The plan mentions pino in Phase 3, but the security spec requires PII redaction 
 ### 4.6 API Versioning Strategy
 
 The existing `API_PREFIX = '/api/v1'` implies versioning, but the plan doesn't address:
+
 - When/how to introduce v2
 - Deprecation policy
 - Whether versioning is in URL path, header, or both
@@ -315,6 +333,7 @@ The existing `API_PREFIX = '/api/v1'` implies versioning, but the plan doesn't a
 ## 5. Summary of Recommended Changes
 
 ### Must Fix (Factual errors)
+
 1. Remove "Express or" — Fastify is decided
 2. Remove `validators/` directory from API — schemas live in `packages/shared`
 3. Remove `handlers/` directory — use Fastify route plugin pattern
@@ -323,6 +342,7 @@ The existing `API_PREFIX = '/api/v1'` implies versioning, but the plan doesn't a
 6. Update Phase 0 to reflect completed work
 
 ### Should Fix (Gaps and alignment)
+
 7. Reference existing yard-photo-analysis spec and schemas as the real Phase 1 feature
 8. Add secret scanning to quality gates
 9. Add format checking to CI description
@@ -332,6 +352,7 @@ The existing `API_PREFIX = '/api/v1'` implies versioning, but the plan doesn't a
 13. Move logging/pino setup from Phase 3 to Phase 1
 
 ### Should Add (Missing sections)
+
 14. ADR for compute choice (Lambda vs. ECS/Fargate)
 15. ADR for ORM choice (document as pending decision, not fait accompli)
 16. AI/LLM integration strategy section
@@ -341,6 +362,7 @@ The existing `API_PREFIX = '/api/v1'` implies versioning, but the plan doesn't a
 20. State management recommendation for web app
 
 ### Nice to Have
+
 21. Multi-project Vitest configuration documentation
 22. Bundle size tooling recommendation (size-limit over shell scripts)
 23. CDK diff as ci.yml job rather than separate workflow

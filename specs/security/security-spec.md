@@ -1,9 +1,11 @@
 # Security Specification & Threat Model
 
 ## Status
+
 Approved
 
 ## Date
+
 2026-02-13
 
 ## Overview
@@ -20,25 +22,25 @@ Related: [ADR-001](../architecture/decisions/001-architecture-overview.md)
 
 ### 1.1 Assets (What We Protect)
 
-| Asset | Sensitivity | Impact if Compromised | Status |
-|---|---|---|---|
-| User photos | Medium | Privacy violation, trust loss | Not yet stored |
-| User addresses/ZIP codes | Medium | PII exposure, regulatory risk | Schema defined |
-| User account credentials | High | Account takeover, data theft | Not yet implemented |
-| Plant database | Low | IP loss, competitive disadvantage | Not yet implemented |
-| AI analysis results | Low-Medium | Contains user-specific yard data | Schema defined |
-| AWS infrastructure | Critical | Service disruption, data breach, financial loss | NetworkStack only |
-| API keys (Anthropic, etc.) | Critical | Financial abuse, service impersonation | Not yet provisioned |
-| Payment data (future) | Critical | Financial fraud, PCI compliance violation | Not planned for v1 |
+| Asset                      | Sensitivity | Impact if Compromised                           | Status              |
+| -------------------------- | ----------- | ----------------------------------------------- | ------------------- |
+| User photos                | Medium      | Privacy violation, trust loss                   | Not yet stored      |
+| User addresses/ZIP codes   | Medium      | PII exposure, regulatory risk                   | Schema defined      |
+| User account credentials   | High        | Account takeover, data theft                    | Not yet implemented |
+| Plant database             | Low         | IP loss, competitive disadvantage               | Not yet implemented |
+| AI analysis results        | Low-Medium  | Contains user-specific yard data                | Schema defined      |
+| AWS infrastructure         | Critical    | Service disruption, data breach, financial loss | NetworkStack only   |
+| API keys (Anthropic, etc.) | Critical    | Financial abuse, service impersonation          | Not yet provisioned |
+| Payment data (future)      | Critical    | Financial fraud, PCI compliance violation       | Not planned for v1  |
 
 ### 1.2 Threat Actors
 
-| Actor | Motivation | Capability |
-|---|---|---|
-| Opportunistic attacker | Financial gain, data harvesting | Automated scanning, known exploits |
-| Disgruntled user | Abuse, disruption | Authenticated access, social engineering |
-| Competitor | IP theft, service disruption | Moderate technical skill |
-| Automated bot | Spam, resource abuse, scraping | High volume, distributed |
+| Actor                  | Motivation                      | Capability                               |
+| ---------------------- | ------------------------------- | ---------------------------------------- |
+| Opportunistic attacker | Financial gain, data harvesting | Automated scanning, known exploits       |
+| Disgruntled user       | Abuse, disruption               | Authenticated access, social engineering |
+| Competitor             | IP theft, service disruption    | Moderate technical skill                 |
+| Automated bot          | Spam, resource abuse, scraping  | High volume, distributed                 |
 
 ### 1.3 Attack Surface
 
@@ -59,14 +61,14 @@ Related: [ADR-001](../architecture/decisions/001-architecture-overview.md)
 
 ### 1.4 STRIDE Analysis
 
-| Threat | Category | Mitigation |
-|---|---|---|
-| Attacker impersonates user | Spoofing | Cognito JWT validation, token rotation |
-| User modifies another user's analysis | Tampering | Resource-owner authorization on all endpoints |
-| User denies uploading inappropriate content | Repudiation | Audit logging with CloudTrail, request logging |
-| Attacker accesses other users' photos | Information Disclosure | S3 private bucket, pre-signed URLs, owner-only access |
-| Attacker floods analysis endpoint | Denial of Service | Rate limiting, WAF, API Gateway throttling |
-| Attacker bypasses free tier limits | Elevation of Privilege | Server-side tier enforcement, no client-side gating |
+| Threat                                      | Category               | Mitigation                                            |
+| ------------------------------------------- | ---------------------- | ----------------------------------------------------- |
+| Attacker impersonates user                  | Spoofing               | Cognito JWT validation, token rotation                |
+| User modifies another user's analysis       | Tampering              | Resource-owner authorization on all endpoints         |
+| User denies uploading inappropriate content | Repudiation            | Audit logging with CloudTrail, request logging        |
+| Attacker accesses other users' photos       | Information Disclosure | S3 private bucket, pre-signed URLs, owner-only access |
+| Attacker floods analysis endpoint           | Denial of Service      | Rate limiting, WAF, API Gateway throttling            |
+| Attacker bypasses free tier limits          | Elevation of Privilege | Server-side tier enforcement, no client-side gating   |
 
 ---
 
@@ -97,14 +99,14 @@ Enforcement: Authorization checks happen in **middleware**, NEVER in individual 
 
 ### 2.3 API Authentication Matrix
 
-| Endpoint | Auth Required | Rate Limit | Rate Limit Mechanism |
-|---|---|---|---|
-| `GET /health` | No | 100/min per IP | API Gateway throttling |
-| `GET /api/v1/zones/:zip` | No | 30/min per IP | API Gateway throttling |
-| `POST /api/v1/analyses` | No (optional) | Unauth: 1/day per IP. Free: 1 total. Premium: 10/day | API Gateway + `@fastify/rate-limit` |
-| `GET /api/v1/analyses/:id` | Yes (owner) | 60/min per user | `@fastify/rate-limit` |
-| `GET /api/v1/plants` | No | 60/min per IP | API Gateway throttling |
-| `GET /api/v1/plants/:id` | No | 60/min per IP | API Gateway throttling |
+| Endpoint                   | Auth Required | Rate Limit                                           | Rate Limit Mechanism                |
+| -------------------------- | ------------- | ---------------------------------------------------- | ----------------------------------- |
+| `GET /health`              | No            | 100/min per IP                                       | API Gateway throttling              |
+| `GET /api/v1/zones/:zip`   | No            | 30/min per IP                                        | API Gateway throttling              |
+| `POST /api/v1/analyses`    | No (optional) | Unauth: 1/day per IP. Free: 1 total. Premium: 10/day | API Gateway + `@fastify/rate-limit` |
+| `GET /api/v1/analyses/:id` | Yes (owner)   | 60/min per user                                      | `@fastify/rate-limit`               |
+| `GET /api/v1/plants`       | No            | 60/min per IP                                        | API Gateway throttling              |
+| `GET /api/v1/plants/:id`   | No            | 60/min per IP                                        | API Gateway throttling              |
 
 ---
 
@@ -123,6 +125,7 @@ Client → API Gateway → Lambda Handler → Zod Schema Validation → Business
 ```
 
 Rules:
+
 - Every request body, query parameter, and path parameter is validated against a Zod schema
 - Validation happens at the handler level BEFORE any business logic
 - Zod schemas are the single source of truth (defined in `packages/shared`)
@@ -131,14 +134,14 @@ Rules:
 
 ### 3.2 Input Constraints
 
-| Input | Constraint | Enforced By | Schema Status |
-|---|---|---|---|
-| Photo file | JPEG/PNG/HEIC, ≤20MB, magic byte validation | API middleware + S3 upload policy | Not yet defined |
-| ZIP code | 5 digits or ZIP+4, regex validated | `ZipCodeSchema` | Implemented |
-| Address fields | Max length, sanitized | `AddressInputSchema` | Implemented |
-| Search queries | Max 100 chars, no SQL/NoSQL injection vectors | `PlantSearchParamsSchema` | Implemented |
-| Pagination | page ≥ 1, limit 1–50 | `PlantSearchParamsSchema` | Implemented |
-| UUIDs | RFC 4122 format | Zod `.uuid()` | Implemented |
+| Input          | Constraint                                    | Enforced By                       | Schema Status   |
+| -------------- | --------------------------------------------- | --------------------------------- | --------------- |
+| Photo file     | JPEG/PNG/HEIC, ≤20MB, magic byte validation   | API middleware + S3 upload policy | Not yet defined |
+| ZIP code       | 5 digits or ZIP+4, regex validated            | `ZipCodeSchema`                   | Implemented     |
+| Address fields | Max length, sanitized                         | `AddressInputSchema`              | Implemented     |
+| Search queries | Max 100 chars, no SQL/NoSQL injection vectors | `PlantSearchParamsSchema`         | Implemented     |
+| Pagination     | page ≥ 1, limit 1–50                          | `PlantSearchParamsSchema`         | Implemented     |
+| UUIDs          | RFC 4122 format                               | Zod `.uuid()`                     | Implemented     |
 
 ### 3.3 Output Encoding
 
@@ -155,24 +158,24 @@ Rules:
 
 ### 4.1 Encryption
 
-| Data State | Method | Status |
-|---|---|---|
-| In transit | TLS 1.2+ enforced on all endpoints (CloudFront, API Gateway, RDS) | Enforced by AWS defaults |
-| At rest (S3) | SSE-S3 (AES-256) | Not yet configured |
-| At rest (RDS) | AWS KMS encryption enabled | Not yet configured |
-| At rest (Secrets Manager) | AWS KMS encryption (default) | Not yet configured |
-| Sensitive fields in DB | Application-level encryption for addresses (AES-256-GCM via a KMS data key) | Not yet implemented |
+| Data State                | Method                                                                      | Status                   |
+| ------------------------- | --------------------------------------------------------------------------- | ------------------------ |
+| In transit                | TLS 1.2+ enforced on all endpoints (CloudFront, API Gateway, RDS)           | Enforced by AWS defaults |
+| At rest (S3)              | SSE-S3 (AES-256)                                                            | Not yet configured       |
+| At rest (RDS)             | AWS KMS encryption enabled                                                  | Not yet configured       |
+| At rest (Secrets Manager) | AWS KMS encryption (default)                                                | Not yet configured       |
+| Sensitive fields in DB    | Application-level encryption for addresses (AES-256-GCM via a KMS data key) | Not yet implemented      |
 
 ### 4.2 Data Retention
 
-| Data | Retention | Deletion Method | Status |
-|---|---|---|---|
-| Unauthenticated user photos | 24 hours | S3 lifecycle policy | Not yet configured |
-| Authenticated user photos | Until user deletes or account closure | S3 object deletion | Not yet implemented |
-| Analysis results | Until user deletes or account closure | Database hard delete | Not yet implemented |
-| User accounts | Until user requests deletion | Full data purge within 30 days | Not yet implemented |
-| CloudWatch logs | 90 days | Log group retention policy | Not yet configured |
-| CloudTrail audit logs | 1 year | S3 lifecycle policy | Not yet configured |
+| Data                        | Retention                             | Deletion Method                | Status              |
+| --------------------------- | ------------------------------------- | ------------------------------ | ------------------- |
+| Unauthenticated user photos | 24 hours                              | S3 lifecycle policy            | Not yet configured  |
+| Authenticated user photos   | Until user deletes or account closure | S3 object deletion             | Not yet implemented |
+| Analysis results            | Until user deletes or account closure | Database hard delete           | Not yet implemented |
+| User accounts               | Until user requests deletion          | Full data purge within 30 days | Not yet implemented |
+| CloudWatch logs             | 90 days                               | Log group retention policy     | Not yet configured  |
+| CloudTrail audit logs       | 1 year                                | S3 lifecycle policy            | Not yet configured  |
 
 ### 4.3 PII Handling
 
@@ -214,13 +217,13 @@ Anthropic API Response → JSON parse → Zod AnalysisResultSchema validation �
 
 ### 5.3 Cost Controls
 
-| Control | Limit | Enforcement |
-|---|---|---|
-| Max tokens per request | 4,096 output tokens | Anthropic API `max_tokens` parameter |
-| Daily spend cap | Configurable per stage | CloudWatch billing alarm + Lambda circuit breaker |
-| Per-user request limit | Free: 1 total. Premium: 10/day | Server-side tier enforcement |
-| Per-IP unauth limit | 1/day | API Gateway + application middleware |
-| Retry limit | 1 retry on parse failure | Application code (no infinite retry loops) |
+| Control                | Limit                          | Enforcement                                       |
+| ---------------------- | ------------------------------ | ------------------------------------------------- |
+| Max tokens per request | 4,096 output tokens            | Anthropic API `max_tokens` parameter              |
+| Daily spend cap        | Configurable per stage         | CloudWatch billing alarm + Lambda circuit breaker |
+| Per-user request limit | Free: 1 total. Premium: 10/day | Server-side tier enforcement                      |
+| Per-IP unauth limit    | 1/day                          | API Gateway + application middleware              |
+| Retry limit            | 1 retry on parse failure       | Application code (no infinite retry loops)        |
 
 ### 5.4 Anthropic API Key Protection
 
@@ -238,12 +241,12 @@ Anthropic API Response → JSON parse → Zod AnalysisResultSchema validation �
 
 > **Note:** If deploying to a single AWS account with stage-based naming (dev/staging/prod stacks), adapt this section accordingly. Multi-account via AWS Organizations is recommended for production but adds operational overhead for small teams.
 
-| Account | Purpose | Access |
-|---|---|---|
-| management | AWS Organizations root, billing | Break-glass only |
-| dev | Development environment | Engineers via SSO |
-| staging | Pre-production testing | CI/CD pipeline + limited engineer access |
-| prod | Production | CI/CD pipeline only (no direct human access) |
+| Account    | Purpose                         | Access                                       |
+| ---------- | ------------------------------- | -------------------------------------------- |
+| management | AWS Organizations root, billing | Break-glass only                             |
+| dev        | Development environment         | Engineers via SSO                            |
+| staging    | Pre-production testing          | CI/CD pipeline + limited engineer access     |
+| prod       | Production                      | CI/CD pipeline only (no direct human access) |
 
 ### 6.2 IAM Principles
 
@@ -268,6 +271,7 @@ Least privilege everywhere. No IAM policy uses `*` for resources in production.
 ```
 
 Rules for CDK stacks:
+
 - Every Lambda function gets a custom role with only the permissions it needs
 - No inline `iam.PolicyStatement` with `actions: ['*']` — CI lint rule enforces this
 - Cross-stack references use interface props, not shared roles
@@ -340,14 +344,14 @@ Rules for CDK stacks:
 
 ### 7.1 Automated Scanning
 
-| Tool | What It Checks | When | Status |
-|---|---|---|---|
-| `npm audit` | Known CVEs in dependencies | Every CI run | Implemented |
-| GitHub Dependabot | Outdated dependencies with known vulnerabilities | Daily scan | Implemented |
-| GitHub Secret Scanning | Accidentally committed secrets | On every push | Implemented |
-| `secretlint` | Secrets/API keys in code | Every CI run | Implemented |
-| `trivy` | Container/dependency vulnerabilities | Every CI run | **Not yet added to CI** |
-| License check | Non-permissive licenses (GPL, AGPL) | Every CI run | **Not yet added to CI** |
+| Tool                   | What It Checks                                   | When          | Status                  |
+| ---------------------- | ------------------------------------------------ | ------------- | ----------------------- |
+| `npm audit`            | Known CVEs in dependencies                       | Every CI run  | Implemented             |
+| GitHub Dependabot      | Outdated dependencies with known vulnerabilities | Daily scan    | Implemented             |
+| GitHub Secret Scanning | Accidentally committed secrets                   | On every push | Implemented             |
+| `secretlint`           | Secrets/API keys in code                         | Every CI run  | Implemented             |
+| `trivy`                | Container/dependency vulnerabilities             | Every CI run  | **Not yet added to CI** |
+| License check          | Non-permissive licenses (GPL, AGPL)              | Every CI run  | **Not yet added to CI** |
 
 ### 7.2 Dependency Policy
 
@@ -363,24 +367,24 @@ Rules for CDK stacks:
 # .github/dependabot.yml
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 10
     groups:
       dev-dependencies:
-        dependency-type: "development"
+        dependency-type: 'development'
       production-dependencies:
-        dependency-type: "production"
+        dependency-type: 'production'
     reviewers:
-      - "ajbusch"
+      - 'ajbusch'
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
 ```
 
 ---
@@ -422,17 +426,17 @@ import security from 'eslint-plugin-security';
 
 The following patterns MUST NOT appear in the codebase (enforced by ESLint custom rules or code review):
 
-| Pattern | Risk | Alternative |
-|---|---|---|
-| `eval()`, `new Function()` | Code injection | Never needed |
-| `dangerouslySetInnerHTML` | XSS | Use React's built-in escaping |
-| `innerHTML` | XSS | Use `textContent` or React |
-| `as any` | Type safety bypass | Use proper types or `unknown` + validation |
-| `JSON.parse(untrustedInput)` without Zod | Schema bypass | Always validate with Zod after parsing |
-| `process.env.SECRET_*` in code | Secret leakage | Read from Secrets Manager at runtime |
-| `console.log(userAddress)` | PII in logs | Use structured logger with redaction |
-| `SELECT ... WHERE id = '${id}'` | SQL injection | Use parameterized queries via ORM |
-| `*` in IAM actions or resources | Over-permissioned | Scope to specific actions and ARNs |
+| Pattern                                  | Risk               | Alternative                                |
+| ---------------------------------------- | ------------------ | ------------------------------------------ |
+| `eval()`, `new Function()`               | Code injection     | Never needed                               |
+| `dangerouslySetInnerHTML`                | XSS                | Use React's built-in escaping              |
+| `innerHTML`                              | XSS                | Use `textContent` or React                 |
+| `as any`                                 | Type safety bypass | Use proper types or `unknown` + validation |
+| `JSON.parse(untrustedInput)` without Zod | Schema bypass      | Always validate with Zod after parsing     |
+| `process.env.SECRET_*` in code           | Secret leakage     | Read from Secrets Manager at runtime       |
+| `console.log(userAddress)`               | PII in logs        | Use structured logger with redaction       |
+| `SELECT ... WHERE id = '${id}'`          | SQL injection      | Use parameterized queries via ORM          |
+| `*` in IAM actions or resources          | Over-permissioned  | Scope to specific actions and ARNs         |
 
 ### 8.4 Secure Logging
 
@@ -479,7 +483,7 @@ const logger = pino({
   run: npx secretlint "**/*"
 
 - name: Check for banned patterns
-  run: pnpm lint  # ESLint security plugin catches these
+  run: pnpm lint # ESLint security plugin catches these
 
 # --- TODO: Add to CI before production launch ---
 - name: License compliance
@@ -542,16 +546,16 @@ it('has no wildcard IAM actions', () => {
 
 > **Implementation Status:** Not yet configured. Required before production launch.
 
-| Signal | Tool | Alert Threshold |
-|---|---|---|
-| 5xx error rate | CloudWatch Alarm | > 1% of requests over 5 minutes |
-| 4xx error spike | CloudWatch Alarm | > 10% of requests over 5 minutes |
-| WAF blocked requests | CloudWatch + SNS | > 100 blocks in 5 minutes |
-| Failed authentication attempts | Cognito + CloudWatch | > 50 per user in 1 hour |
-| Lambda errors | CloudWatch Alarm | Any invocation error |
-| Unusual S3 access pattern | CloudTrail + GuardDuty | Anomaly detection |
-| Dependency vulnerability | Dependabot | Any high/critical CVE |
-| AI API spend anomaly | CloudWatch billing alarm | > 2x daily average |
+| Signal                         | Tool                     | Alert Threshold                  |
+| ------------------------------ | ------------------------ | -------------------------------- |
+| 5xx error rate                 | CloudWatch Alarm         | > 1% of requests over 5 minutes  |
+| 4xx error spike                | CloudWatch Alarm         | > 10% of requests over 5 minutes |
+| WAF blocked requests           | CloudWatch + SNS         | > 100 blocks in 5 minutes        |
+| Failed authentication attempts | Cognito + CloudWatch     | > 50 per user in 1 hour          |
+| Lambda errors                  | CloudWatch Alarm         | Any invocation error             |
+| Unusual S3 access pattern      | CloudTrail + GuardDuty   | Anomaly detection                |
+| Dependency vulnerability       | Dependabot               | Any high/critical CVE            |
+| AI API spend anomaly           | CloudWatch billing alarm | > 2x daily average               |
 
 ### 10.2 Response Playbook (Abbreviated)
 
@@ -598,30 +602,30 @@ Reviewer verifies:
 
 Controls are required **before** the feature that needs them ships. This table tracks what must be done and when.
 
-| Control | Required Before | Status |
-|---|---|---|
-| Zod input schemas | Any API endpoint | Implemented |
-| ESLint security plugin | Any code merged | Implemented |
-| Secretlint in CI | Any code merged | Implemented |
-| npm audit in CI | Any code merged | Implemented |
-| `pnpm install --frozen-lockfile` | Any CI run | Implemented |
-| GitHub OIDC (no long-lived credentials) | Any deployment | Implemented |
-| VPC with private/isolated subnets | Database or Lambda deployment | Implemented |
-| Pino logger with PII redaction | Any endpoint handling PII | Not started |
-| S3 bucket security config | Photo upload feature | Not started |
-| Cognito authentication | User accounts feature | Not started |
-| Authorization middleware | Any user-specific endpoint | Not started |
-| CORS origin allowlist | Frontend ↔ API integration | Not started |
-| Application-level address encryption | Address storage feature | Not started |
-| CDK security assertion tests | Any new CDK stack | Not started |
-| AI output validation via Zod | Yard analysis feature | Not started |
-| AI cost controls (max tokens, spend cap) | Yard analysis feature | Not started |
-| Trivy in CI | Production launch | Not started |
-| License checker in CI | Production launch | Not started |
-| WAF rules | Production launch | Not started |
-| CloudWatch alarms & monitoring | Production launch | Not started |
-| Secrets Manager integration | Any secret needed at runtime | Not started |
-| ORM selection (must support parameterized queries) | Database feature | Not started |
+| Control                                            | Required Before               | Status      |
+| -------------------------------------------------- | ----------------------------- | ----------- |
+| Zod input schemas                                  | Any API endpoint              | Implemented |
+| ESLint security plugin                             | Any code merged               | Implemented |
+| Secretlint in CI                                   | Any code merged               | Implemented |
+| npm audit in CI                                    | Any code merged               | Implemented |
+| `pnpm install --frozen-lockfile`                   | Any CI run                    | Implemented |
+| GitHub OIDC (no long-lived credentials)            | Any deployment                | Implemented |
+| VPC with private/isolated subnets                  | Database or Lambda deployment | Implemented |
+| Pino logger with PII redaction                     | Any endpoint handling PII     | Not started |
+| S3 bucket security config                          | Photo upload feature          | Not started |
+| Cognito authentication                             | User accounts feature         | Not started |
+| Authorization middleware                           | Any user-specific endpoint    | Not started |
+| CORS origin allowlist                              | Frontend ↔ API integration    | Not started |
+| Application-level address encryption               | Address storage feature       | Not started |
+| CDK security assertion tests                       | Any new CDK stack             | Not started |
+| AI output validation via Zod                       | Yard analysis feature         | Not started |
+| AI cost controls (max tokens, spend cap)           | Yard analysis feature         | Not started |
+| Trivy in CI                                        | Production launch             | Not started |
+| License checker in CI                              | Production launch             | Not started |
+| WAF rules                                          | Production launch             | Not started |
+| CloudWatch alarms & monitoring                     | Production launch             | Not started |
+| Secrets Manager integration                        | Any secret needed at runtime  | Not started |
+| ORM selection (must support parameterized queries) | Database feature              | Not started |
 
 ---
 
