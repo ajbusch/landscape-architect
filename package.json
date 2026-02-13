@@ -1,0 +1,24 @@
+{
+  "name": "landscape-architect",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test:unit test:contract",
+    "test:unit": "turbo test:unit",
+    "test:integration": "turbo test:integration",
+    "test:contract": "turbo test:contract",
+    "test:e2e": "turbo test:e2e",
+    "test:coverage-check": "turbo test:coverage-check",
+    "clean": "turbo clean",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  }
+}

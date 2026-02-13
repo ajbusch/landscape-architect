@@ -1,0 +1,23 @@
+{
+  "name": "@landscape-architect/infra",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint lib/ bin/",
+    "lint:fix": "eslint lib/ bin/ --fix",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run",
+    "clean": "rm -rf dist coverage cdk.out"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.175.0",
+    "constructs": "^10.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "aws-cdk": "^2.175.0"
+  }
+}

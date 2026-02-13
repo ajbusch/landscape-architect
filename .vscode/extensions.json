@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "vitest.explorer",
+    "ms-playwright.playwright",
+    "amazonwebservices.aws-toolkit-vscode",
+    "editorconfig.editorconfig"
+  ]
+}

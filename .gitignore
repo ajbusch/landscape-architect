@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+cdk.out/
+*.js
+*.d.ts
+*.d.ts.map
+*.js.map
+
+# Keep config files that are JS
+!eslint.config.mjs
+!vitest.config.ts
+!vite.config.ts
+!playwright.config.ts
+!jest.config.ts
+
+# Coverage
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Turbo
+.turbo/
+
+# AWS CDK
+cdk.out/
+cdk.context.json
+
+# Playwright
+test-results/
+playwright-report/
