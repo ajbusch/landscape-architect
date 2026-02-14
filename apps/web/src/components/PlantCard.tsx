@@ -1,5 +1,4 @@
 import { Link } from 'react-router';
-import type { PlantRecommendation } from '@landscape-architect/shared';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sun, Droplets, Gauge, Thermometer, Leaf } from 'lucide-react';
@@ -22,25 +21,33 @@ const DIFFICULTY_LABELS: Record<string, string> = {
   advanced: 'Advanced',
 };
 
-interface PlantCardProps {
-  recommendation: PlantRecommendation;
+export interface PlantCardProps {
+  id: string;
+  commonName: string;
+  scientificName: string;
+  photoUrl?: string;
+  reason?: string;
+  light: string;
+  waterNeeds: string;
+  difficulty: string;
+  zoneMin: string;
+  zoneMax: string;
 }
 
-export function PlantCard({ recommendation }: PlantCardProps): React.JSX.Element {
-  const {
-    plantId,
-    commonName,
-    scientificName,
-    photoUrl,
-    reason,
-    light,
-    waterNeeds,
-    difficulty,
-    hardinessZones,
-  } = recommendation;
-
+export function PlantCard({
+  id,
+  commonName,
+  scientificName,
+  photoUrl,
+  reason,
+  light,
+  waterNeeds,
+  difficulty,
+  zoneMin,
+  zoneMax,
+}: PlantCardProps): React.JSX.Element {
   return (
-    <Link to={`/plants/${plantId}`} className="block no-underline">
+    <Link to={`/plants/${id}`} className="block no-underline">
       <Card className="h-full transition-shadow hover:shadow-md">
         <div className="aspect-[4/3] overflow-hidden rounded-t-xl bg-muted">
           {photoUrl ? (
@@ -56,7 +63,7 @@ export function PlantCard({ recommendation }: PlantCardProps): React.JSX.Element
             <h4 className="font-semibold">{commonName}</h4>
             <p className="text-sm italic text-muted-foreground">{scientificName}</p>
           </div>
-          <p className="text-sm text-muted-foreground">{reason}</p>
+          {reason && <p className="text-sm text-muted-foreground">{reason}</p>}
           <div className="flex flex-wrap gap-1.5">
             <Badge variant="outline" className="gap-1">
               <Sun className="size-3" />
@@ -72,7 +79,7 @@ export function PlantCard({ recommendation }: PlantCardProps): React.JSX.Element
             </Badge>
             <Badge variant="outline" className="gap-1">
               <Thermometer className="size-3" />
-              {hardinessZones.min}–{hardinessZones.max}
+              {zoneMin}–{zoneMax}
             </Badge>
           </div>
         </CardContent>
