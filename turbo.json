@@ -31,7 +31,8 @@
     },
     "test:e2e": {
       "dependsOn": ["build"],
-      "cache": false
+      "cache": false,
+      "env": ["BASE_URL"]
     },
     "test:coverage-check": {
       "dependsOn": ["test:unit"]
