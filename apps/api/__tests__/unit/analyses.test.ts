@@ -23,6 +23,8 @@ vi.mock('../../src/services/photo.js', () => ({
   convertHeicToJpeg: vi.fn(),
   uploadPhoto: vi.fn(),
   getPhotoPresignedUrl: vi.fn(),
+  getPhotoUploadUrl: vi.fn(),
+  downloadPhoto: vi.fn(),
   BUCKET_NAME: 'test-bucket',
 }));
 
@@ -40,8 +42,9 @@ import { getAnthropicApiKey } from '../../src/services/secrets.js';
 import {
   validatePhoto,
   convertHeicToJpeg,
-  uploadPhoto,
   getPhotoPresignedUrl,
+  getPhotoUploadUrl,
+  downloadPhoto,
 } from '../../src/services/photo.js';
 import { analyzeYardPhoto } from '../../src/services/claude-vision.js';
 import { matchPlants } from '../../src/services/plant-matcher.js';
@@ -51,8 +54,9 @@ const mockGetZoneByZip = getZoneByZip as unknown as Mock;
 const mockGetApiKey = getAnthropicApiKey as unknown as Mock;
 const mockValidatePhoto = validatePhoto as unknown as Mock;
 const mockConvertHeic = convertHeicToJpeg as unknown as Mock;
-const mockUploadPhoto = uploadPhoto as unknown as Mock;
 const mockGetPresignedUrl = getPhotoPresignedUrl as unknown as Mock;
+const mockGetUploadUrl = getPhotoUploadUrl as unknown as Mock;
+const mockDownloadPhoto = downloadPhoto as unknown as Mock;
 const mockAnalyzeYard = analyzeYardPhoto as unknown as Mock;
 const mockMatchPlants = matchPlants as unknown as Mock;
 
@@ -167,37 +171,11 @@ const sampleRecommendations = [
 // JPEG magic bytes
 const jpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Array(100).fill(0)]);
 
-function buildMultipartBody(
-  photo: Buffer = jpegBuffer,
-  address: string = JSON.stringify({ zipCode: '28202' }),
-) {
-  const boundary = '----FormBoundary123';
-  const parts: Buffer[] = [];
-
-  // Photo part
-  parts.push(
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="yard.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
-    ),
-  );
-  parts.push(photo);
-  parts.push(Buffer.from('\r\n'));
-
-  // Address part
-  parts.push(
-    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="address"\r\n\r\n`),
-  );
-  parts.push(Buffer.from(address));
-  parts.push(Buffer.from('\r\n'));
-
-  // Closing boundary
-  parts.push(Buffer.from(`--${boundary}--\r\n`));
-
-  return {
-    body: Buffer.concat(parts),
-    contentType: `multipart/form-data; boundary=${boundary}`,
-  };
-}
+const analysisBody = {
+  s3Key: 'photos/anonymous/test-id/original.jpg',
+  analysisId: 'test-id',
+  address: { zipCode: '28202' },
+};
 
 function setupHappyPath() {
   mockValidatePhoto.mockReturnValue({
@@ -208,7 +186,7 @@ function setupHappyPath() {
   });
   mockGetZoneByZip.mockReturnValue(sampleZone);
   mockGetApiKey.mockResolvedValue('test-api-key');
-  mockUploadPhoto.mockResolvedValue('photos/anonymous/test-id/original.jpg');
+  mockDownloadPhoto.mockResolvedValue(jpegBuffer);
   mockAnalyzeYard.mockResolvedValue({ ok: true, data: sampleAiOutput });
   mockMatchPlants.mockResolvedValue(sampleRecommendations);
   mockGetPresignedUrl.mockResolvedValue('https://s3.example.com/presigned-photo');
@@ -232,23 +210,58 @@ describe('Analysis routes', () => {
     vi.clearAllMocks();
   });
 
+  // ── POST /api/v1/analyses/upload-url ─────────────────────────────
+
+  describe('POST /api/v1/analyses/upload-url', () => {
+    it('returns presigned URL for valid content type', async () => {
+      mockGetUploadUrl.mockResolvedValue({
+        uploadUrl: 'https://s3.example.com/presigned-put',
+        s3Key: 'photos/anonymous/abc/original.jpg',
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/analyses/upload-url',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ contentType: 'image/jpeg' }),
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.uploadUrl).toBe('https://s3.example.com/presigned-put');
+      expect(body.s3Key).toBeDefined();
+      expect(body.analysisId).toBeDefined();
+    });
+
+    it('returns 400 for unsupported content type', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/analyses/upload-url',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ contentType: 'application/pdf' }),
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(JSON.parse(response.body).error).toContain('Unsupported content type');
+    });
+  });
+
   // ── POST /api/v1/analyses ────────────────────────────────────────
 
   describe('POST /api/v1/analyses', () => {
     it('returns 201 with analysis on successful flow', async () => {
       setupHappyPath();
-      const { body, contentType } = buildMultipartBody();
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(201);
       const result = JSON.parse(response.body);
-      expect(result.id).toBeDefined();
+      expect(result.id).toBe('test-id');
       expect(result.photoUrl).toBe('https://s3.example.com/presigned-photo');
       expect(result.address.zipCode).toBe('28202');
       expect(result.address.zone).toBe('7b');
@@ -262,13 +275,12 @@ describe('Analysis routes', () => {
 
     it('calls Claude Vision with correct parameters', async () => {
       setupHappyPath();
-      const { body, contentType } = buildMultipartBody();
 
       await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(mockAnalyzeYard).toHaveBeenCalledWith(
@@ -281,13 +293,12 @@ describe('Analysis routes', () => {
 
     it('stores analysis in DynamoDB with TTL', async () => {
       setupHappyPath();
-      const { body, contentType } = buildMultipartBody();
 
       await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(mockSend).toHaveBeenCalledOnce();
@@ -296,21 +307,20 @@ describe('Analysis routes', () => {
       expect(input.TableName).toBe('test-table');
 
       const item = input.Item as Record<string, unknown>;
-      expect(item.PK).toMatch(/^ANALYSIS#/);
-      expect(item.SK).toMatch(/^ANALYSIS#/);
+      expect(item.PK).toBe('ANALYSIS#test-id');
+      expect(item.SK).toBe('ANALYSIS#test-id');
       expect(item.ttl).toBeTypeOf('number');
       expect(item.s3Key).toBe('photos/anonymous/test-id/original.jpg');
     });
 
     it('assigns UUIDs to features from AI output', async () => {
       setupHappyPath();
-      const { body, contentType } = buildMultipartBody();
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       const result = JSON.parse(response.body);
@@ -323,77 +333,74 @@ describe('Analysis routes', () => {
 
     // ── Validation errors ──────────────────────────────────────────
 
-    it('returns 400 when photo is missing', async () => {
-      const boundary = '----FormBoundary123';
-      const body = Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="address"\r\n\r\n{"zipCode":"28202"}\r\n--${boundary}--\r\n`,
-      );
-
+    it('returns 400 when s3Key is missing', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ analysisId: 'test-id', address: { zipCode: '28202' } }),
       });
 
       expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body).error).toBe('Photo is required');
+      expect(JSON.parse(response.body).error).toContain('s3Key');
     });
 
     it('returns 400 when address is missing', async () => {
-      const boundary = '----FormBoundary123';
-      const parts = [
-        Buffer.from(
-          `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="yard.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
-        ),
-        jpegBuffer,
-        Buffer.from(`\r\n--${boundary}--\r\n`),
-      ];
-
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
-        body: Buffer.concat(parts),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ s3Key: 'photos/test.jpg', analysisId: 'test-id' }),
       });
 
       expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body).error).toBe('Address is required');
+      expect(JSON.parse(response.body).error).toContain('zipCode');
     });
 
     it('returns 400 when photo validation fails', async () => {
+      mockDownloadPhoto.mockResolvedValue(jpegBuffer);
       mockValidatePhoto.mockReturnValue({
         valid: false,
         error: 'Please upload a JPEG, PNG, or HEIC image',
       });
-      const { body, contentType } = buildMultipartBody();
+      mockGetZoneByZip.mockReturnValue(sampleZone);
+      mockGetApiKey.mockResolvedValue('test-key');
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(400);
       expect(JSON.parse(response.body).error).toBe('Please upload a JPEG, PNG, or HEIC image');
     });
 
-    it('returns 404 when ZIP code not found', async () => {
-      mockValidatePhoto.mockReturnValue({
-        valid: true,
-        type: 'jpeg',
-        mediaType: 'image/jpeg',
-        ext: 'jpg',
-      });
-      mockGetZoneByZip.mockReturnValue(null);
-      const { body, contentType } = buildMultipartBody();
+    it('returns 400 when S3 download fails', async () => {
+      mockGetZoneByZip.mockReturnValue(sampleZone);
+      mockGetApiKey.mockResolvedValue('test-key');
+      mockDownloadPhoto.mockRejectedValue(new Error('NoSuchKey'));
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(JSON.parse(response.body).error).toContain('Photo not found');
+    });
+
+    it('returns 404 when ZIP code not found', async () => {
+      mockGetZoneByZip.mockReturnValue(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/analyses',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(404);
@@ -403,48 +410,18 @@ describe('Analysis routes', () => {
     // ── Service errors ─────────────────────────────────────────────
 
     it('returns 500 when Secrets Manager fails', async () => {
-      mockValidatePhoto.mockReturnValue({
-        valid: true,
-        type: 'jpeg',
-        mediaType: 'image/jpeg',
-        ext: 'jpg',
-      });
       mockGetZoneByZip.mockReturnValue(sampleZone);
       mockGetApiKey.mockRejectedValue(new Error('Secrets Manager error'));
-      const { body, contentType } = buildMultipartBody();
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(500);
       expect(JSON.parse(response.body).error).toContain('unable to initialize AI service');
-    });
-
-    it('returns 500 when S3 upload fails', async () => {
-      mockValidatePhoto.mockReturnValue({
-        valid: true,
-        type: 'jpeg',
-        mediaType: 'image/jpeg',
-        ext: 'jpg',
-      });
-      mockGetZoneByZip.mockReturnValue(sampleZone);
-      mockGetApiKey.mockResolvedValue('test-key');
-      mockUploadPhoto.mockRejectedValue(new Error('S3 upload failed'));
-      const { body, contentType } = buildMultipartBody();
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
-      });
-
-      expect(response.statusCode).toBe(500);
-      expect(JSON.parse(response.body).error).toBe('Failed to upload photo');
     });
 
     it('returns 504 when Claude API times out', async () => {
@@ -453,13 +430,12 @@ describe('Analysis routes', () => {
         ok: false,
         error: { type: 'timeout', message: 'Analysis timed out. Please try again.' },
       });
-      const { body, contentType } = buildMultipartBody();
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(504);
@@ -475,13 +451,12 @@ describe('Analysis routes', () => {
           message: 'Service is busy. Please try again in a moment.',
         },
       });
-      const { body, contentType } = buildMultipartBody();
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(429);
@@ -493,13 +468,12 @@ describe('Analysis routes', () => {
         ok: false,
         error: { type: 'api_error', message: 'API error' },
       });
-      const { body, contentType } = buildMultipartBody();
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(500);
@@ -515,13 +489,12 @@ describe('Analysis routes', () => {
         recommendedPlantTypes: [],
       };
       mockAnalyzeYard.mockResolvedValue({ ok: true, data: notYardOutput });
-      const { body, contentType } = buildMultipartBody();
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(422);
@@ -543,12 +516,11 @@ describe('Analysis routes', () => {
       const convertedJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe1, ...Array(50).fill(0)]);
       mockConvertHeic.mockResolvedValue(convertedJpeg);
 
-      const { body, contentType } = buildMultipartBody();
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(201);
@@ -571,12 +543,11 @@ describe('Analysis routes', () => {
       });
       mockConvertHeic.mockRejectedValue(new Error('sharp conversion error'));
 
-      const { body, contentType } = buildMultipartBody();
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
-        headers: { 'content-type': contentType },
-        body,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(analysisBody),
       });
 
       expect(response.statusCode).toBe(400);
