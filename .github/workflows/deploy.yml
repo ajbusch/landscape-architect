@@ -106,7 +106,7 @@ jobs:
         run: cd infra && npx cdk deploy --all --require-approval never -c stage=staging
 
       - name: Install Playwright
-        run: npx playwright install --with-deps chromium
+        run: pnpm --filter @landscape-architect/web exec playwright install --with-deps chromium
 
       - name: E2E tests
         run: pnpm test:e2e
