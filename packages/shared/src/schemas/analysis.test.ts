@@ -241,9 +241,20 @@ describe('AiAnalysisOutputSchema', () => {
 
   it('accepts all valid feature types', () => {
     const featureTypes = [
-      'tree', 'shrub', 'flower', 'grass', 'patio', 'walkway',
-      'fence', 'wall', 'deck', 'water_feature', 'slope', 'flat_area',
-      'garden_bed', 'other',
+      'tree',
+      'shrub',
+      'flower',
+      'grass',
+      'patio',
+      'walkway',
+      'fence',
+      'wall',
+      'deck',
+      'water_feature',
+      'slope',
+      'flat_area',
+      'garden_bed',
+      'other',
     ];
     for (const type of featureTypes) {
       const data = {
@@ -256,8 +267,14 @@ describe('AiAnalysisOutputSchema', () => {
 
   it('accepts all valid plant types in recommendations', () => {
     const plantTypes = [
-      'tree', 'shrub', 'perennial', 'annual', 'grass',
-      'vine', 'groundcover', 'bulb',
+      'tree',
+      'shrub',
+      'perennial',
+      'annual',
+      'grass',
+      'vine',
+      'groundcover',
+      'bulb',
     ];
     for (const plantType of plantTypes) {
       const data = {

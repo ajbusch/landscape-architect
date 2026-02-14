@@ -38,11 +38,7 @@ vi.mock('../../src/services/plant-matcher.js', () => ({
 import { docClient } from '../../src/db.js';
 import { getZoneByZip } from '../../src/services/zone-lookup.js';
 import { getAnthropicApiKey } from '../../src/services/secrets.js';
-import {
-  validatePhoto,
-  uploadPhoto,
-  getPhotoPresignedUrl,
-} from '../../src/services/photo.js';
+import { validatePhoto, uploadPhoto, getPhotoPresignedUrl } from '../../src/services/photo.js';
 import { analyzeYardPhoto } from '../../src/services/claude-vision.js';
 import { matchPlants } from '../../src/services/plant-matcher.js';
 
@@ -127,9 +123,7 @@ function buildMultipartBody() {
     ),
     jpegBuffer,
     Buffer.from('\r\n'),
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="address"\r\n\r\n`,
-    ),
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="address"\r\n\r\n`),
     Buffer.from(JSON.stringify({ zipCode: '28202' })),
     Buffer.from(`\r\n--${boundary}--\r\n`),
   ];

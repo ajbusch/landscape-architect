@@ -26,9 +26,7 @@ const MAX_PHOTO_SIZE = 20 * 1024 * 1024; // 20MB
 /**
  * Validate photo via magic bytes, not file extension.
  */
-export function validatePhoto(
-  buffer: Buffer,
-): PhotoValidationResult | PhotoValidationError {
+export function validatePhoto(buffer: Buffer): PhotoValidationResult | PhotoValidationError {
   if (buffer.length > MAX_PHOTO_SIZE) {
     return { valid: false, error: 'Image must be under 20MB' };
   }
@@ -43,12 +41,7 @@ export function validatePhoto(
   }
 
   // PNG: 89 50 4E 47
-  if (
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47
-  ) {
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
     return { valid: true, type: 'png', mediaType: 'image/png', ext: 'png' };
   }
 

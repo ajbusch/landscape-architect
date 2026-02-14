@@ -1,0 +1,5 @@
+{
+  "permissions": {
+    "allow": ["Bash(aws cloudformation describe-stack-resources:*)"]
+  }
+}

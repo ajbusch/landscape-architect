@@ -185,9 +185,7 @@ function buildMultipartBody(
 
   // Address part
   parts.push(
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="address"\r\n\r\n`,
-    ),
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="address"\r\n\r\n`),
   );
   parts.push(Buffer.from(address));
   parts.push(Buffer.from('\r\n'));
@@ -378,9 +376,7 @@ describe('Analysis routes', () => {
       });
 
       expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body).error).toBe(
-        'Please upload a JPEG, PNG, or HEIC image',
-      );
+      expect(JSON.parse(response.body).error).toBe('Please upload a JPEG, PNG, or HEIC image');
     });
 
     it('returns 404 when ZIP code not found', async () => {
@@ -467,9 +463,7 @@ describe('Analysis routes', () => {
       });
 
       expect(response.statusCode).toBe(504);
-      expect(JSON.parse(response.body).error).toBe(
-        'Analysis timed out. Please try again.',
-      );
+      expect(JSON.parse(response.body).error).toBe('Analysis timed out. Please try again.');
     });
 
     it('returns 429 when Claude API rate limited', async () => {
@@ -586,9 +580,7 @@ describe('Analysis routes', () => {
       });
 
       expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body).error).toContain(
-        'Unable to process this image format',
-      );
+      expect(JSON.parse(response.body).error).toContain('Unable to process this image format');
     });
   });
 

@@ -45,7 +45,9 @@ async function findPlantsByTypeAndLight(
 
   // Filter by light and zone
   return plants.filter(
-    (p) => p.light.includes(light as Plant['light'][number]) && isZoneInRange(zone, p.zoneMin, p.zoneMax),
+    (p) =>
+      p.light.includes(light as Plant['light'][number]) &&
+      isZoneInRange(zone, p.zoneMin, p.zoneMax),
   );
 }
 

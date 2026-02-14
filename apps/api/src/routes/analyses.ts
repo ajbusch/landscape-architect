@@ -78,10 +78,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
 
       zipCode = (addressData as { zipCode: string }).zipCode;
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        err.message.includes('request file too large')
-      ) {
+      if (err instanceof Error && err.message.includes('request file too large')) {
         return await reply.status(413).send({ error: 'Image must be under 20MB' });
       }
       throw err;
@@ -114,12 +111,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
     let s3Key: string;
 
     try {
-      s3Key = await uploadPhoto(
-        analysisId,
-        photoBuffer,
-        validation.ext,
-        validation.mediaType,
-      );
+      s3Key = await uploadPhoto(analysisId, photoBuffer, validation.ext, validation.mediaType);
     } catch (err) {
       request.log.error(err, 'S3 upload failed');
       return await reply.status(500).send({ error: 'Failed to upload photo' });
@@ -232,66 +224,63 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
   /**
    * GET /api/v1/analyses/:id — fetch a stored analysis.
    */
-  app.get<{ Params: { id: string } }>(
-    '/api/v1/analyses/:id',
-    async (request, reply) => {
-      const { id } = request.params;
+  app.get<{ Params: { id: string } }>('/api/v1/analyses/:id', async (request, reply) => {
+    const { id } = request.params;
 
-      const result = await docClient.send(
-        new GetCommand({
-          TableName: TABLE_NAME,
-          Key: { PK: `ANALYSIS#${id}`, SK: `ANALYSIS#${id}` },
-        }),
-      );
+    const result = await docClient.send(
+      new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `ANALYSIS#${id}`, SK: `ANALYSIS#${id}` },
+      }),
+    );
 
-      if (!result.Item) {
+    if (!result.Item) {
+      return await reply.status(404).send({ error: 'Analysis not found' });
+    }
+
+    // Check if expired
+    const item = result.Item;
+    if (item.ttl && typeof item.ttl === 'number') {
+      const now = Math.floor(Date.now() / 1000);
+      if (item.ttl < now) {
         return await reply.status(404).send({ error: 'Analysis not found' });
       }
+    }
 
-      // Check if expired
-      const item = result.Item;
-      if (item.ttl && typeof item.ttl === 'number') {
-        const now = Math.floor(Date.now() / 1000);
-        if (item.ttl < now) {
-          return await reply.status(404).send({ error: 'Analysis not found' });
-        }
+    // Generate fresh pre-signed URL for the photo
+    const s3Key = item.s3Key as string | undefined;
+    let photoUrl = item.photoUrl as string;
+
+    if (s3Key) {
+      try {
+        photoUrl = await getPhotoPresignedUrl(s3Key);
+      } catch {
+        // If pre-signing fails, fall back to stored URL (may be expired)
       }
+    }
 
-      // Generate fresh pre-signed URL for the photo
-      const s3Key = item.s3Key as string | undefined;
-      let photoUrl = item.photoUrl as string;
+    // Build response — strip DynamoDB internal fields
+    const response: AnalysisResponse = {
+      id: item.id as string,
+      userId: item.userId as string | undefined,
+      photoUrl,
+      address: item.address as AnalysisResponse['address'],
+      result: item.result as AnalysisResponse['result'],
+      tier: item.tier as AnalysisResponse['tier'],
+      createdAt: item.createdAt as string,
+      expiresAt: item.expiresAt as string | undefined,
+    };
 
-      if (s3Key) {
-        try {
-          photoUrl = await getPhotoPresignedUrl(s3Key);
-        } catch {
-          // If pre-signing fails, fall back to stored URL (may be expired)
-        }
-      }
+    // Validate response shape
+    const validated = AnalysisResponseSchema.safeParse(response);
+    if (!validated.success) {
+      request.log.error(
+        { issues: validated.error.issues },
+        'Stored analysis failed schema validation',
+      );
+      return await reply.status(500).send({ error: 'Internal server error' });
+    }
 
-      // Build response — strip DynamoDB internal fields
-      const response: AnalysisResponse = {
-        id: item.id as string,
-        userId: item.userId as string | undefined,
-        photoUrl,
-        address: item.address as AnalysisResponse['address'],
-        result: item.result as AnalysisResponse['result'],
-        tier: item.tier as AnalysisResponse['tier'],
-        createdAt: item.createdAt as string,
-        expiresAt: item.expiresAt as string | undefined,
-      };
-
-      // Validate response shape
-      const validated = AnalysisResponseSchema.safeParse(response);
-      if (!validated.success) {
-        request.log.error(
-          { issues: validated.error.issues },
-          'Stored analysis failed schema validation',
-        );
-        return await reply.status(500).send({ error: 'Internal server error' });
-      }
-
-      return await reply.send(validated.data);
-    },
-  );
+    return await reply.send(validated.data);
+  });
 }

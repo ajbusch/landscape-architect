@@ -33,9 +33,7 @@ const validAiResponse = {
   overallSunExposure: 'partial_shade',
   estimatedSoilType: 'loamy',
   isValidYardPhoto: true,
-  features: [
-    { type: 'tree', label: 'Oak', confidence: 'high' },
-  ],
+  features: [{ type: 'tree', label: 'Oak', confidence: 'high' }],
   recommendedPlantTypes: [
     {
       category: 'quick_win',
@@ -58,12 +56,7 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(validAiResponse) }],
     });
 
-    const result = await analyzeYardPhoto(
-      'base64data',
-      'image/jpeg',
-      '7b',
-      'USDA Zone 7b',
-    );
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -116,12 +109,7 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(validAiResponse) }],
     });
 
-    const result = await analyzeYardPhoto(
-      'base64data',
-      'image/jpeg',
-      '7b',
-      'USDA Zone 7b',
-    );
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
 
     expect(mockCreate).toHaveBeenCalledTimes(2);
     expect(result.ok).toBe(true);
@@ -137,12 +125,7 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(validAiResponse) }],
     });
 
-    const result = await analyzeYardPhoto(
-      'base64data',
-      'image/jpeg',
-      '7b',
-      'USDA Zone 7b',
-    );
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
 
     expect(mockCreate).toHaveBeenCalledTimes(2);
     expect(result.ok).toBe(true);
@@ -153,12 +136,7 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: 'still not json' }],
     });
 
-    const result = await analyzeYardPhoto(
-      'base64data',
-      'image/jpeg',
-      '7b',
-      'USDA Zone 7b',
-    );
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
 
     expect(mockCreate).toHaveBeenCalledTimes(2); // original + 1 retry
     expect(result.ok).toBe(false);
@@ -172,12 +150,7 @@ describe('analyzeYardPhoto', () => {
     timeoutError.name = 'AbortError';
     mockCreate.mockRejectedValueOnce(timeoutError);
 
-    const result = await analyzeYardPhoto(
-      'base64data',
-      'image/jpeg',
-      '7b',
-      'USDA Zone 7b',
-    );
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
 
     expect(mockCreate).toHaveBeenCalledTimes(1); // No retry on timeout
     expect(result.ok).toBe(false);
@@ -192,12 +165,7 @@ describe('analyzeYardPhoto', () => {
     const rateError = new Anthropic.APIError(429, {}, 'Rate limited', {} as unknown as Headers);
     mockCreate.mockRejectedValueOnce(rateError);
 
-    const result = await analyzeYardPhoto(
-      'base64data',
-      'image/jpeg',
-      '7b',
-      'USDA Zone 7b',
-    );
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
 
     expect(mockCreate).toHaveBeenCalledTimes(1); // No retry on rate limit
     expect(result.ok).toBe(false);
@@ -218,12 +186,7 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(invalidPhotoResponse) }],
     });
 
-    const result = await analyzeYardPhoto(
-      'base64data',
-      'image/jpeg',
-      '7b',
-      'USDA Zone 7b',
-    );
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -242,12 +205,7 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(validAiResponse) }],
     });
 
-    const result = await analyzeYardPhoto(
-      'base64data',
-      'image/jpeg',
-      '7b',
-      'USDA Zone 7b',
-    );
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
 
     expect(result.ok).toBe(true);
   });
