@@ -88,7 +88,7 @@ describe('Plant routes', () => {
       expect(body.totalPages).toBe(0);
     });
 
-    it('filters by type using DynamoDB query', async () => {
+    it('filters by type using PLANT_TYPE# partition key', async () => {
       mockSend.mockResolvedValueOnce({ Items: [samplePlant] });
 
       const response = await app.inject({
@@ -98,6 +98,12 @@ describe('Plant routes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(mockSend).toHaveBeenCalledOnce();
+
+      // Verify the query uses PLANT_TYPE#<type> as PK
+      const callArg = mockSend.mock.calls[0]![0];
+      const input = callArg.input as Record<string, unknown>;
+      expect(input.ExpressionAttributeValues).toEqual({ ':pk': 'PLANT_TYPE#perennial' });
+      expect(input.KeyConditionExpression).toBe('PK = :pk');
     });
 
     it('filters by zone', async () => {
@@ -127,6 +133,73 @@ describe('Plant routes', () => {
       expect(body.plants).toHaveLength(0);
     });
 
+    it('filters by zone using ZONE# partition key', async () => {
+      mockSend.mockResolvedValueOnce({ Items: [samplePlant] });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/plants?zone=7b',
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      // Verify the query uses ZONE#<zone> as PK
+      const callArg = mockSend.mock.calls[0]![0];
+      const input = callArg.input as Record<string, unknown>;
+      expect(input.ExpressionAttributeValues).toEqual({ ':pk': 'ZONE#7b' });
+    });
+
+    it('includes plant in all zones within its range', async () => {
+      // samplePlant has zoneMin=5a, zoneMax=8b — should appear for any zone in that range
+      const zonesInRange = ['5a', '5b', '6a', '6b', '7a', '7b', '8a', '8b'];
+      const zonesOutOfRange = ['3a', '4a', '4b', '9a', '10a'];
+
+      for (const zone of zonesInRange) {
+        mockSend.mockResolvedValueOnce({ Items: [samplePlant] });
+        const response = await app.inject({
+          method: 'GET',
+          url: `/api/v1/plants?zone=${zone}`,
+        });
+        const body = JSON.parse(response.body);
+        expect(body.plants).toHaveLength(1);
+      }
+
+      for (const zone of zonesOutOfRange) {
+        mockSend.mockResolvedValueOnce({ Items: [samplePlant] });
+        const response = await app.inject({
+          method: 'GET',
+          url: `/api/v1/plants?zone=${zone}`,
+        });
+        const body = JSON.parse(response.body);
+        expect(body.plants).toHaveLength(0);
+      }
+    });
+
+    it('returns list fields as plain string arrays, not DynamoDB format', async () => {
+      mockSend.mockResolvedValueOnce({ Items: [samplePlant] });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/plants',
+      });
+
+      const body = JSON.parse(response.body);
+      const plant = body.plants[0];
+
+      // light, soilTypes, and tags must be plain string arrays
+      expect(Array.isArray(plant.light)).toBe(true);
+      expect(plant.light[0]).toBe('full_sun');
+      expect(typeof plant.light[0]).toBe('string');
+
+      expect(Array.isArray(plant.soilTypes)).toBe(true);
+      expect(plant.soilTypes[0]).toBe('loamy');
+      expect(typeof plant.soilTypes[0]).toBe('string');
+
+      expect(Array.isArray(plant.tags)).toBe(true);
+      expect(plant.tags[0]).toBe('test');
+      expect(typeof plant.tags[0]).toBe('string');
+    });
+
     it('returns 400 for invalid query params', async () => {
       const response = await app.inject({
         method: 'GET',
@@ -150,6 +223,23 @@ describe('Plant routes', () => {
       const body = JSON.parse(response.body);
       expect(body.id).toBe('55efd08d-b675-4cb2-a271-ecd2b7003516');
       expect(body.commonName).toBe('Test Plant');
+    });
+
+    it('returns list fields as plain string arrays', async () => {
+      mockSend.mockResolvedValueOnce({ Item: samplePlant });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/plants/55efd08d-b675-4cb2-a271-ecd2b7003516',
+      });
+
+      const body = JSON.parse(response.body);
+      expect(Array.isArray(body.light)).toBe(true);
+      expect(typeof body.light[0]).toBe('string');
+      expect(Array.isArray(body.soilTypes)).toBe(true);
+      expect(typeof body.soilTypes[0]).toBe('string');
+      expect(Array.isArray(body.tags)).toBe(true);
+      expect(typeof body.tags[0]).toBe('string');
     });
 
     it('returns 404 for non-existent plant', async () => {
