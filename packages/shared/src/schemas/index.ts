@@ -19,10 +19,14 @@ export {
   PlantRecommendationSchema,
   AnalysisResultSchema,
   AnalysisResponseSchema,
+  FeatureTypeSchema,
+  PlantTypeSchema,
+  AiAnalysisOutputSchema,
   type IdentifiedFeature,
   type PlantRecommendation,
   type AnalysisResult,
   type AnalysisResponse,
+  type AiAnalysisOutput,
 } from './analysis.js';
 
 export {

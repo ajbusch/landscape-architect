@@ -18,13 +18,20 @@
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@aws-sdk/client-dynamodb": "^3.990.0",
+    "@aws-sdk/client-s3": "^3.990.0",
+    "@aws-sdk/client-secrets-manager": "^3.990.0",
     "@aws-sdk/lib-dynamodb": "^3.990.0",
+    "@aws-sdk/s3-request-presigner": "^3.990.0",
     "@fastify/cors": "^11.0.0",
+    "@fastify/multipart": "^9.4.0",
     "@landscape-architect/shared": "workspace:*",
-    "fastify": "^5.2.0"
+    "fastify": "^5.2.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "@types/sharp": "^0.32.0",
     "@vitest/coverage-v8": "^4.0.18",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

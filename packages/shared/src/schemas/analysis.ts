@@ -120,3 +120,61 @@ export const AnalysisResponseSchema = z.object({
 });
 
 export type AnalysisResponse = z.infer<typeof AnalysisResponseSchema>;
+
+/**
+ * Feature type enum — extracted for reuse in the AI output schema.
+ */
+export const FeatureTypeSchema = IdentifiedFeatureSchema.shape.type;
+
+/**
+ * Plant type enum — extracted for reuse.
+ */
+export const PlantTypeSchema = z.enum([
+  'tree',
+  'shrub',
+  'perennial',
+  'annual',
+  'grass',
+  'vine',
+  'groundcover',
+  'bulb',
+]);
+
+/**
+ * Raw AI output from Claude Vision — intermediate schema before plant matching.
+ * This is different from AnalysisResultSchema: the AI returns plant *types* with
+ * search criteria, not specific plant records from our database.
+ */
+export const AiAnalysisOutputSchema = z.object({
+  summary: z.string().min(1).max(2000),
+  yardSize: z.enum(['small', 'medium', 'large']),
+  overallSunExposure: SunExposureSchema,
+  estimatedSoilType: z.enum(['clay', 'sandy', 'loamy', 'silty', 'rocky', 'unknown']),
+  features: z.array(
+    z.object({
+      type: FeatureTypeSchema,
+      label: z.string().min(1).max(100),
+      species: z.string().max(100).optional(),
+      confidence: ConfidenceLevelSchema,
+      sunExposure: SunExposureSchema.optional(),
+      notes: z.string().max(500).optional(),
+    }),
+  ),
+  recommendedPlantTypes: z.array(
+    z.object({
+      category: RecommendationCategorySchema,
+      plantType: PlantTypeSchema,
+      lightRequirement: SunExposureSchema,
+      reason: z.string().min(1).max(500),
+      searchCriteria: z.object({
+        type: z.string().min(1).max(50),
+        light: z.string().min(1).max(50),
+        tags: z.array(z.string().max(50)).max(10).optional(),
+      }),
+    }),
+  ),
+  isValidYardPhoto: z.boolean(),
+  invalidPhotoReason: z.string().max(500).optional(),
+});
+
+export type AiAnalysisOutput = z.infer<typeof AiAnalysisOutputSchema>;

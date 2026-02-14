@@ -4,6 +4,7 @@ import {
   PlantRecommendationSchema,
   AnalysisResultSchema,
   AnalysisResponseSchema,
+  AiAnalysisOutputSchema,
 } from './analysis.js';
 
 const validFeature = {
@@ -152,5 +153,153 @@ describe('AnalysisResponseSchema', () => {
       expiresAt: '2025-06-16T12:00:00Z',
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('AiAnalysisOutputSchema', () => {
+  const validAiOutput = {
+    summary: 'A medium-sized suburban backyard with mature trees.',
+    yardSize: 'medium',
+    overallSunExposure: 'partial_shade',
+    estimatedSoilType: 'loamy',
+    isValidYardPhoto: true,
+    features: [
+      {
+        type: 'tree',
+        label: 'Mature Oak',
+        species: 'Quercus alba',
+        confidence: 'high',
+        sunExposure: 'full_sun',
+        notes: 'Large canopy',
+      },
+    ],
+    recommendedPlantTypes: [
+      {
+        category: 'quick_win',
+        plantType: 'perennial',
+        lightRequirement: 'partial_shade',
+        reason: 'Add color under the oak.',
+        searchCriteria: { type: 'perennial', light: 'partial_shade', tags: ['native'] },
+      },
+    ],
+  };
+
+  it('accepts a valid AI output', () => {
+    expect(AiAnalysisOutputSchema.safeParse(validAiOutput).success).toBe(true);
+  });
+
+  it('accepts output with isValidYardPhoto false and empty arrays', () => {
+    const invalidPhoto = {
+      ...validAiOutput,
+      isValidYardPhoto: false,
+      invalidPhotoReason: 'This is a photo of a cat.',
+      features: [],
+      recommendedPlantTypes: [],
+    };
+    expect(AiAnalysisOutputSchema.safeParse(invalidPhoto).success).toBe(true);
+  });
+
+  it('rejects missing required fields', () => {
+    const missingField = { ...validAiOutput } as Record<string, unknown>;
+    delete missingField.summary;
+    expect(AiAnalysisOutputSchema.safeParse(missingField).success).toBe(false);
+  });
+
+  it('rejects invalid yardSize enum', () => {
+    const result = AiAnalysisOutputSchema.safeParse({
+      ...validAiOutput,
+      yardSize: 'huge',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid plantType in recommendations', () => {
+    const result = AiAnalysisOutputSchema.safeParse({
+      ...validAiOutput,
+      recommendedPlantTypes: [
+        {
+          ...validAiOutput.recommendedPlantTypes[0],
+          plantType: 'cactus',
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid category in recommendations', () => {
+    const result = AiAnalysisOutputSchema.safeParse({
+      ...validAiOutput,
+      recommendedPlantTypes: [
+        {
+          ...validAiOutput.recommendedPlantTypes[0],
+          category: 'bonus_pick',
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts all valid feature types', () => {
+    const featureTypes = [
+      'tree',
+      'shrub',
+      'flower',
+      'grass',
+      'patio',
+      'walkway',
+      'fence',
+      'wall',
+      'deck',
+      'water_feature',
+      'slope',
+      'flat_area',
+      'garden_bed',
+      'other',
+    ];
+    for (const type of featureTypes) {
+      const data = {
+        ...validAiOutput,
+        features: [{ type, label: 'Test', confidence: 'medium' }],
+      };
+      expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(true);
+    }
+  });
+
+  it('accepts all valid plant types in recommendations', () => {
+    const plantTypes = [
+      'tree',
+      'shrub',
+      'perennial',
+      'annual',
+      'grass',
+      'vine',
+      'groundcover',
+      'bulb',
+    ];
+    for (const plantType of plantTypes) {
+      const data = {
+        ...validAiOutput,
+        recommendedPlantTypes: [
+          {
+            ...validAiOutput.recommendedPlantTypes[0],
+            plantType,
+          },
+        ],
+      };
+      expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(true);
+    }
+  });
+
+  it('allows optional tags in searchCriteria', () => {
+    const data = {
+      ...validAiOutput,
+      recommendedPlantTypes: [
+        {
+          ...validAiOutput.recommendedPlantTypes[0],
+          searchCriteria: { type: 'perennial', light: 'partial_shade' },
+        },
+      ],
+    };
+    expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(true);
   });
 });
