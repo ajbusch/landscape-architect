@@ -45,7 +45,7 @@ describe('App', () => {
 
   it('renders analyze page at /analyze', () => {
     renderWithRouter('/analyze');
-    expect(screen.getByRole('heading', { name: 'Analyze' })).toBeInTheDocument();
+    expect(screen.getByText('Analyze Your Yard')).toBeInTheDocument();
   });
 
   it('renders results page at /analyze/:id', () => {
