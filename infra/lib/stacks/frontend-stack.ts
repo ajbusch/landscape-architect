@@ -8,6 +8,8 @@ import type { Construct } from 'constructs';
 export interface FrontendStackProps extends StackProps {
   stage: string;
   apiUrl: string;
+  /** Path to the built web assets directory. Defaults to ../apps/web/dist */
+  webAssetPath?: string;
 }
 
 export class FrontendStack extends Stack {
@@ -61,7 +63,7 @@ export class FrontendStack extends Stack {
     });
 
     new s3deploy.BucketDeployment(this, 'DeploySite', {
-      sources: [s3deploy.Source.asset('../apps/web/dist')],
+      sources: [s3deploy.Source.asset(props.webAssetPath ?? '../apps/web/dist')],
       destinationBucket: siteBucket,
       distribution,
       distributionPaths: ['/*'],

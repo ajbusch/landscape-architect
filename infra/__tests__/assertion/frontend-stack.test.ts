@@ -1,13 +1,20 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, it } from 'vitest';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { FrontendStack } from '../../lib/stacks/frontend-stack.js';
+
+const webAssetPath = mkdtempSync(join(tmpdir(), 'web-dist-'));
+writeFileSync(join(webAssetPath, 'index.html'), '<html></html>');
 
 describe('FrontendStack', () => {
   const app = new App();
   const stack = new FrontendStack(app, 'TestFrontend', {
     stage: 'dev',
     apiUrl: 'https://abc123.execute-api.us-east-1.amazonaws.com/',
+    webAssetPath,
     env: { account: '111111111111', region: 'us-east-1' },
   });
   const template = Template.fromStack(stack);
@@ -85,7 +92,15 @@ describe('FrontendStack', () => {
           Match.objectLike({
             PathPattern: '/api/*',
             ViewerProtocolPolicy: 'redirect-to-https',
-            AllowedMethods: Match.arrayWith(['GET', 'HEAD', 'OPTIONS', 'PUT', 'PATCH', 'POST', 'DELETE']),
+            AllowedMethods: Match.arrayWith([
+              'GET',
+              'HEAD',
+              'OPTIONS',
+              'PUT',
+              'PATCH',
+              'POST',
+              'DELETE',
+            ]),
           }),
         ]),
       }),

@@ -40,7 +40,8 @@ export class ApiStack extends Stack {
         target: 'node20',
         mainFields: ['module', 'main'],
         externalModules: ['@aws-sdk/*', 'sharp'],
-        banner: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+        banner:
+          "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
       },
       environment: {
         TABLE_NAME: tableName,
