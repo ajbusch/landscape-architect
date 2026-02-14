@@ -13,9 +13,7 @@ type ZipZoneMap = Record<string, ZipZoneEntry>;
 let zipZoneData: ZipZoneMap | null = null;
 
 function loadData(): ZipZoneMap {
-  if (!zipZoneData) {
-    zipZoneData = require('../data/zip-zones.json') as ZipZoneMap;
-  }
+  zipZoneData ??= require('../data/zip-zones.json') as ZipZoneMap;
   return zipZoneData;
 }
 
@@ -58,8 +56,12 @@ export function getZoneByZip(zip: string): ZoneResponse | null {
   const match = /^(\d+)([ab])$/.exec(zone);
   if (!match) return null;
 
-  const zoneNumber = parseInt(match[1]!, 10);
-  const zoneLetter = match[2] as 'a' | 'b';
+  const numStr = match[1];
+  const letterStr = match[2];
+  if (!numStr || !letterStr) return null;
+
+  const zoneNumber = parseInt(numStr, 10);
+  const zoneLetter = letterStr as 'a' | 'b';
   const temps = ZONE_TEMP_RANGES[zone];
   if (!temps) return null;
 
@@ -70,6 +72,6 @@ export function getZoneByZip(zip: string): ZoneResponse | null {
     zoneLetter,
     minTempF: temps.minTempF,
     maxTempF: temps.maxTempF,
-    description: `USDA Hardiness Zone ${zone} (${temps.minTempF}°F to ${temps.maxTempF}°F)`,
+    description: `USDA Hardiness Zone ${zone} (${String(temps.minTempF)}°F to ${String(temps.maxTempF)}°F)`,
   };
 }
