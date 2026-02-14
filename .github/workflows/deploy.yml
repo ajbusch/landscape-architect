@@ -80,6 +80,9 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
+      - name: Build web app
+        run: pnpm --filter @landscape-architect/web build
+
       - name: CDK deploy
         run: cd infra && npx cdk deploy --all --require-approval never -c stage=dev
 
@@ -101,6 +104,9 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
+
+      - name: Build web app
+        run: pnpm --filter @landscape-architect/web build
 
       - name: CDK deploy
         run: cd infra && npx cdk deploy --all --require-approval never -c stage=staging
@@ -131,6 +137,9 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
+
+      - name: Build web app
+        run: pnpm --filter @landscape-architect/web build
 
       - name: CDK deploy
         run: cd infra && npx cdk deploy --all --require-approval never -c stage=prod

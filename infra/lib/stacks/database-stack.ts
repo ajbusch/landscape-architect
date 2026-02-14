@@ -1,4 +1,4 @@
-import { RemovalPolicy, Stack, type StackProps, Tags } from 'aws-cdk-lib';
+import { CfnOutput, RemovalPolicy, Stack, type StackProps, Tags } from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import type { Construct } from 'constructs';
 
@@ -29,6 +29,12 @@ export class DatabaseStack extends Stack {
     });
 
     this.table = table;
+
+    new CfnOutput(this, 'TableName', {
+      value: table.tableName,
+      description: 'Name of the main DynamoDB table',
+      exportName: `${id}-TableName`,
+    });
 
     Tags.of(this).add('Project', 'LandscapeArchitect');
     Tags.of(this).add('Stage', props.stage);
