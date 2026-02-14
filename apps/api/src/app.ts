@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import { healthRoute } from './routes/health.js';
 import { plantsRoute } from './routes/plants.js';
 import { zonesRoute } from './routes/zones.js';
+import { analysesRoute } from './routes/analyses.js';
 
 export interface AppOptions {
   logger?: boolean;
@@ -19,6 +20,7 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
   await app.register(healthRoute);
   await app.register(plantsRoute);
   await app.register(zonesRoute);
+  await app.register(analysesRoute);
 
   return app;
 }
