@@ -1,4 +1,8 @@
-import type { ZoneResponse, AnalysisResponse } from '@landscape-architect/shared';
+import type {
+  ZoneResponse,
+  AnalysisResponse,
+  PlantSearchResponse,
+} from '@landscape-architect/shared';
 
 export async function lookupZone(zip: string): Promise<ZoneResponse> {
   const res = await fetch(`/api/v1/zones/${encodeURIComponent(zip)}`);
@@ -33,6 +37,16 @@ export async function fetchAnalysis(id: string): Promise<AnalysisResponse> {
     throw new ApiError(res.status, (body.error as string | undefined) ?? res.statusText);
   }
   return res.json() as Promise<AnalysisResponse>;
+}
+
+export async function searchPlants(params: Record<string, string>): Promise<PlantSearchResponse> {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`/api/v1/plants${query ? `?${query}` : ''}`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new ApiError(res.status, (body.error as string | undefined) ?? res.statusText);
+  }
+  return res.json() as Promise<PlantSearchResponse>;
 }
 
 export class ApiError extends Error {

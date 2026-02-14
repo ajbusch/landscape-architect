@@ -233,7 +233,19 @@ export function ResultsPage(): React.JSX.Element {
               )}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {recs.map((rec) => (
-                  <PlantCard key={rec.plantId} recommendation={rec} />
+                  <PlantCard
+                    key={rec.plantId}
+                    id={rec.plantId}
+                    commonName={rec.commonName}
+                    scientificName={rec.scientificName}
+                    photoUrl={rec.photoUrl}
+                    reason={rec.reason}
+                    light={rec.light}
+                    waterNeeds={rec.waterNeeds}
+                    difficulty={rec.difficulty}
+                    zoneMin={rec.hardinessZones.min}
+                    zoneMax={rec.hardinessZones.max}
+                  />
                 ))}
               </div>
             </div>
