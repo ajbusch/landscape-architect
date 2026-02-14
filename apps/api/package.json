@@ -24,6 +24,7 @@
     "@aws-sdk/client-secrets-manager": "^3.990.0",
     "@aws-sdk/lib-dynamodb": "^3.990.0",
     "@aws-sdk/s3-request-presigner": "^3.990.0",
+    "@fastify/aws-lambda": "^6.4.0",
     "@fastify/cors": "^11.0.0",
     "@fastify/multipart": "^9.4.0",
     "@landscape-architect/shared": "workspace:*",
@@ -31,6 +32,7 @@
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.160",
     "@types/sharp": "^0.32.0",
     "@vitest/coverage-v8": "^4.0.18",
     "tsx": "^4.19.0",

@@ -44,11 +44,13 @@ export class StorageStack extends Stack {
     new CfnOutput(this, 'PhotoBucketName', {
       value: bucket.bucketName,
       description: 'Name of the photo upload S3 bucket',
+      exportName: `${id}-PhotoBucketName`,
     });
 
     new CfnOutput(this, 'AnthropicApiKeySecretArn', {
       value: anthropicApiKeySecret.secretArn,
       description: 'ARN of the Anthropic API key secret',
+      exportName: `${id}-AnthropicApiKeySecretArn`,
     });
 
     Tags.of(this).add('Project', 'LandscapeArchitect');
