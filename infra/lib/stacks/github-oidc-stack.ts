@@ -117,6 +117,14 @@ export class GitHubOidcStack extends Stack {
     deployRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
+        actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
+        resources: ['arn:aws:iam::*:secret:LandscapeArchitect/*'],
+      }),
+    );
+
+    deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
         actions: ['ec2:Describe*'],
         resources: ['*'],
       }),
