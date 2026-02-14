@@ -41,6 +41,14 @@ pnpm test:contract      # API contract tests
 pnpm test:e2e           # Playwright E2E tests
 ```
 
+## Infrastructure
+
+The `infra/` directory contains AWS CDK stacks:
+
+- **NetworkStack** — VPC with public, private, and isolated subnets
+- **CloudTrailStack** — Account-wide audit logging
+- **GitHubOidcStack** — GitHub Actions OIDC deploy role for CI/CD
+
 ## Project Structure
 
 ```
