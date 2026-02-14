@@ -26,8 +26,7 @@ describe('GitHubOidcStack', () => {
           Match.objectLike({
             Condition: Match.objectLike({
               StringLike: Match.objectLike({
-                'token.actions.githubusercontent.com:sub':
-                  'repo:ajbusch/landscape-architect:*',
+                'token.actions.githubusercontent.com:sub': 'repo:ajbusch/landscape-architect:*',
               }),
             }),
           }),
@@ -38,9 +37,7 @@ describe('GitHubOidcStack', () => {
 
   it('tags resources with project', () => {
     template.hasResourceProperties('AWS::IAM::Role', {
-      Tags: Match.arrayWith([
-        Match.objectLike({ Key: 'Project', Value: 'LandscapeArchitect' }),
-      ]),
+      Tags: Match.arrayWith([Match.objectLike({ Key: 'Project', Value: 'LandscapeArchitect' })]),
     });
   });
 });

@@ -78,10 +78,7 @@ export class GitHubOidcStack extends Stack {
           'iam:ListRolePolicies',
           'iam:ListAttachedRolePolicies',
         ],
-        resources: [
-          'arn:aws:iam::*:role/LandscapeArchitect-*',
-          'arn:aws:iam::*:role/cdk-*',
-        ],
+        resources: ['arn:aws:iam::*:role/LandscapeArchitect-*', 'arn:aws:iam::*:role/cdk-*'],
       }),
     );
 
