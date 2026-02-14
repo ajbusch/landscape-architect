@@ -50,7 +50,7 @@ describe('App', () => {
 
   it('renders results page at /analyze/:id', () => {
     renderWithRouter('/analyze/abc-123');
-    expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument();
+    expect(screen.getByText('Loading analysis...')).toBeInTheDocument();
   });
 
   it('renders plants page at /plants', () => {
