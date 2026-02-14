@@ -5,6 +5,7 @@ import { CloudTrailStack } from '../lib/stacks/cloudtrail-stack.js';
 import { DatabaseStack } from '../lib/stacks/database-stack.js';
 import { GitHubOidcStack } from '../lib/stacks/github-oidc-stack.js';
 import { NetworkStack } from '../lib/stacks/network-stack.js';
+import { StorageStack } from '../lib/stacks/storage-stack.js';
 
 const app = new App();
 
@@ -27,6 +28,14 @@ new CloudTrailStack(app, `LandscapeArchitect-CloudTrail-${stage}`, {
 });
 
 new DatabaseStack(app, `LandscapeArchitect-Database-${stage}`, {
+  stage,
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION ?? 'us-east-1',
+  },
+});
+
+new StorageStack(app, `LandscapeArchitect-Storage-${stage}`, {
   stage,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
