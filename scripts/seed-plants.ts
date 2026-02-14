@@ -5,7 +5,7 @@
  * and writes to DynamoDB. Skips any plant that already exists in the table
  * (DynamoDB is the source of truth, not the seed file).
  *
- * Usage: npx tsx scripts/seed-plants.ts [--table-name <name>]
+ * Usage: npx tsx scripts/seed-plants.ts [--table-name <name>] [--force]
  */
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -82,8 +82,10 @@ async function main(): Promise<void> {
       ? process.argv[tableNameArg + 1]
       : (process.env.TABLE_NAME ?? 'LandscapeArchitect-Database-dev');
 
+  const force = process.argv.includes('--force');
+
   if (!tableName) {
-    console.error('Usage: npx tsx scripts/seed-plants.ts [--table-name <name>]');
+    console.error('Usage: npx tsx scripts/seed-plants.ts [--table-name <name>] [--force]');
     process.exit(1);
   }
 
@@ -109,34 +111,43 @@ async function main(): Promise<void> {
   console.log(`Validated ${plants.length} plants`);
 
   const client = new DynamoDBClient({});
-  const docClient = DynamoDBDocumentClient.from(client);
+  const docClient = DynamoDBDocumentClient.from(client, {
+    marshallOptions: { removeUndefinedValues: true },
+  });
 
-  // Check which plants already exist (by primary item)
-  const newPlants: Plant[] = [];
-  for (const plant of plants) {
-    const existing = await docClient.send(
-      new GetCommand({
-        TableName: tableName,
-        Key: { PK: `PLANT#${plant.id}`, SK: `PLANT#${plant.id}` },
-        ProjectionExpression: 'PK',
-      }),
-    );
-    if (existing.Item) {
-      console.log(`  Skipping "${plant.commonName}" (already exists)`);
-    } else {
-      newPlants.push(plant);
+  let plantsToSeed: Plant[];
+
+  if (force) {
+    console.log('--force: overwriting all plants');
+    plantsToSeed = plants;
+  } else {
+    // Check which plants already exist (by primary item)
+    plantsToSeed = [];
+    for (const plant of plants) {
+      const existing = await docClient.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { PK: `PLANT#${plant.id}`, SK: `PLANT#${plant.id}` },
+          ProjectionExpression: 'PK',
+        }),
+      );
+      if (existing.Item) {
+        console.log(`  Skipping "${plant.commonName}" (already exists)`);
+      } else {
+        plantsToSeed.push(plant);
+      }
     }
   }
 
-  if (newPlants.length === 0) {
+  if (plantsToSeed.length === 0) {
     console.log('All plants already exist in the table. Nothing to seed.');
     return;
   }
 
-  // Build DynamoDB items only for new plants
-  const allItems = newPlants.flatMap(buildDynamoItems);
+  // Build DynamoDB items only for plants to seed
+  const allItems = plantsToSeed.flatMap(buildDynamoItems);
   console.log(
-    `Writing ${allItems.length} items for ${newPlants.length} new plants to table "${tableName}"`,
+    `Writing ${allItems.length} items for ${plantsToSeed.length} new plants to table "${tableName}"`,
   );
 
   // Write in batches of 25 (DynamoDB limit)
@@ -155,7 +166,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `Seed complete. Added ${newPlants.length} new plants, skipped ${plants.length - newPlants.length} existing.`,
+    `Seed complete. Added ${plantsToSeed.length} plants, skipped ${plants.length - plantsToSeed.length} existing.`,
   );
 }
 
