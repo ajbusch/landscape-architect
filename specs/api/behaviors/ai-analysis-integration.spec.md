@@ -1,9 +1,11 @@
 # Feature: AI Analysis Integration
 
 ## Status
+
 Draft
 
 ## Context
+
 This spec covers the integration between our API and the Anthropic Claude Vision API for yard photo analysis. It defines the prompt design, response parsing strategy, error handling, and the end-to-end flow from photo upload to structured results.
 
 Related: Yard Photo Analysis spec, Plant Database spec, ADR-004 (DynamoDB)
@@ -41,6 +43,7 @@ User                    API                         S3              Claude Visio
 ## 1. Photo Upload
 
 **Pre-processing before AI call:**
+
 - Validate MIME type via magic bytes (not file extension)
 - Accepted: JPEG, PNG, HEIC
 - Max size: 20MB
@@ -53,11 +56,13 @@ User                    API                         S3              Claude Visio
 ## 2. Zone Resolution
 
 **Before AI call, resolve the ZIP to a USDA zone:**
+
 - Query DynamoDB: `PK=ZIP#{zipCode}` `SK=ZIP#{zipCode}`
 - If not found: return 404 with "ZIP code not found"
 - Pass the zone info to the AI prompt for context
 
 **USDA Zone data loading:**
+
 - The ZIP-to-zone mapping (~42,000 entries) should be seeded into DynamoDB
 - Source: USDA Plant Hardiness Zone Map data
 - Each entry: `{ PK: "ZIP#28202", SK: "ZIP#28202", zone: "7b", zoneNumber: 7, zoneLetter: "b", minTempF: 5, maxTempF: 10, description: "Average annual extreme minimum temperature 5 to 10 °F" }`
@@ -126,7 +131,8 @@ The photo is sent as a base64-encoded image in the message content.
 
 ### Why `recommendedPlantTypes` Instead of Specific Plants
 
-The AI does NOT pick specific plants from our database. Instead it recommends plant *types* with search criteria. The API then queries DynamoDB using those criteria to find actual plants. This means:
+The AI does NOT pick specific plants from our database. Instead it recommends plant _types_ with search criteria. The API then queries DynamoDB using those criteria to find actual plants. This means:
+
 - The AI can't hallucinate plants that don't exist in our database
 - Recommendations always link to real, browsable plant records
 - We control the plant data quality, not the AI
@@ -137,11 +143,13 @@ The AI does NOT pick specific plants from our database. Instead it recommends pl
 ## 4. Response Parsing & Plant Matching
 
 ### Step 1: Parse AI Response
+
 ```typescript
 const raw = JSON.parse(claudeResponse);
 ```
 
 ### Step 2: Validate Against Schema
+
 ```typescript
 const parsed = AiAnalysisOutputSchema.safeParse(raw);
 if (!parsed.success) {
@@ -151,6 +159,7 @@ if (!parsed.success) {
 ```
 
 ### Step 3: Check for Invalid Photo
+
 ```typescript
 if (!parsed.data.isValidYardPhoto) {
   return { statusCode: 422, body: { error: parsed.data.invalidPhotoReason } };
@@ -158,7 +167,9 @@ if (!parsed.data.isValidYardPhoto) {
 ```
 
 ### Step 4: Match Plant Types to Real Plants
+
 For each item in `recommendedPlantTypes`, query DynamoDB:
+
 ```typescript
 for (const rec of parsed.data.recommendedPlantTypes) {
   // Query: plants matching type + light + zone
@@ -169,25 +180,27 @@ for (const rec of parsed.data.recommendedPlantTypes) {
 ```
 
 ### Step 5: Assemble Final Response
+
 Combine the AI analysis with matched plant records into the `AnalysisResponseSchema` and return.
 
 ---
 
 ## 5. Error Handling
 
-| Error | Handling |
-|-------|---------|
-| Claude API timeout (>30s) | Return 504 with "Analysis timed out. Please try again." |
-| Claude API rate limit | Return 429 with "Service is busy. Please try again in a moment." |
-| Claude returns invalid JSON | Retry once with explicit prompt. If second attempt fails, return 500. |
-| Claude returns valid JSON but fails schema validation | Retry once. If fails again, return 500 with partial results if possible. |
-| No plants match the AI's criteria | Return the analysis without recommendations for that category. Never return zero total recommendations — fall back to popular plants for the zone. |
-| Photo is not a yard | Return 422 with the AI's explanation. |
-| HEIC conversion fails | Return 400 with "Unable to process this image format. Please try JPEG or PNG." |
-| S3 upload fails | Return 500. Do not call the AI. |
-| Secrets Manager fails | Return 500. Log the error (without the secret value). |
+| Error                                                 | Handling                                                                                                                                           |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude API timeout (>30s)                             | Return 504 with "Analysis timed out. Please try again."                                                                                            |
+| Claude API rate limit                                 | Return 429 with "Service is busy. Please try again in a moment."                                                                                   |
+| Claude returns invalid JSON                           | Retry once with explicit prompt. If second attempt fails, return 500.                                                                              |
+| Claude returns valid JSON but fails schema validation | Retry once. If fails again, return 500 with partial results if possible.                                                                           |
+| No plants match the AI's criteria                     | Return the analysis without recommendations for that category. Never return zero total recommendations — fall back to popular plants for the zone. |
+| Photo is not a yard                                   | Return 422 with the AI's explanation.                                                                                                              |
+| HEIC conversion fails                                 | Return 400 with "Unable to process this image format. Please try JPEG or PNG."                                                                     |
+| S3 upload fails                                       | Return 500. Do not call the AI.                                                                                                                    |
+| Secrets Manager fails                                 | Return 500. Log the error (without the secret value).                                                                                              |
 
 ### Retry Strategy
+
 - Max 1 retry on AI parsing failures
 - No retry on timeouts (user is already waiting)
 - No retry on rate limits (would make it worse)
@@ -198,11 +211,13 @@ Combine the AI analysis with matched plant records into the `AnalysisResponseSch
 ## 6. Cost & Performance
 
 ### Claude API Costs
+
 - Start with Claude Sonnet 4 for development and testing
 - Evaluate Sonnet vs Opus quality on real yard photos before production launch
 - Model is configured as an environment variable, not hardcoded — easy to switch
 
 ### Performance Budget
+
 - S3 upload: < 3s
 - Zone lookup: < 50ms
 - Claude Vision call: 5-15s (this is the bottleneck)
@@ -210,6 +225,7 @@ Combine the AI analysis with matched plant records into the `AnalysisResponseSch
 - Total: < 20s target, < 30s hard limit
 
 ### Progress Updates
+
 - **V1:** Simple spinner on the frontend. The POST request blocks until analysis completes.
 - **Future improvement:** Add polling or SSE for real-time progress updates ("Uploading photo...", "Analyzing yard...", "Matching plants..."). Track this as a UX enhancement after launch.
 
@@ -262,25 +278,29 @@ const AiAnalysisOutputSchema = z.object({
   yardSize: z.enum(['small', 'medium', 'large']),
   overallSunExposure: SunExposureSchema,
   estimatedSoilType: z.enum(['clay', 'sandy', 'loamy', 'silty', 'rocky', 'unknown']),
-  features: z.array(z.object({
-    type: IdentifiedFeatureSchema.shape.type,
-    label: z.string(),
-    species: z.string().optional(),
-    confidence: ConfidenceLevelSchema,
-    sunExposure: SunExposureSchema.optional(),
-    notes: z.string().optional(),
-  })),
-  recommendedPlantTypes: z.array(z.object({
-    category: RecommendationCategorySchema,
-    plantType: PlantSchema.shape.type,
-    lightRequirement: SunExposureSchema,
-    reason: z.string(),
-    searchCriteria: z.object({
-      type: z.string(),
-      light: z.string(),
-      tags: z.array(z.string()).optional(),
+  features: z.array(
+    z.object({
+      type: IdentifiedFeatureSchema.shape.type,
+      label: z.string(),
+      species: z.string().optional(),
+      confidence: ConfidenceLevelSchema,
+      sunExposure: SunExposureSchema.optional(),
+      notes: z.string().optional(),
     }),
-  })),
+  ),
+  recommendedPlantTypes: z.array(
+    z.object({
+      category: RecommendationCategorySchema,
+      plantType: PlantSchema.shape.type,
+      lightRequirement: SunExposureSchema,
+      reason: z.string(),
+      searchCriteria: z.object({
+        type: z.string(),
+        light: z.string(),
+        tags: z.array(z.string()).optional(),
+      }),
+    }),
+  ),
   isValidYardPhoto: z.boolean(),
   invalidPhotoReason: z.string().optional(),
 });
@@ -289,6 +309,7 @@ const AiAnalysisOutputSchema = z.object({
 ---
 
 ## Security Considerations
+
 - Photo is sent to Claude as base64 — never as a URL (prevents SSRF)
 - User address/ZIP is NOT sent to Claude — only the resolved zone
 - Anthropic API key read from Secrets Manager at runtime, cached for Lambda lifecycle (not per-request)
