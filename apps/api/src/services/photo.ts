@@ -1,6 +1,5 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import sharp from 'sharp';
 
 const s3 = new S3Client({});
 
@@ -67,6 +66,7 @@ export function validatePhoto(buffer: Buffer): PhotoValidationResult | PhotoVali
  * Convert HEIC to JPEG for Claude Vision (which doesn't support HEIC).
  */
 export async function convertHeicToJpeg(buffer: Buffer): Promise<Buffer> {
+  const sharp = (await import('sharp')).default;
   return sharp(buffer).jpeg({ quality: 90 }).toBuffer();
 }
 

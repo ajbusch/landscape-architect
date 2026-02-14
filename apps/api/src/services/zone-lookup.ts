@@ -1,7 +1,6 @@
-import { createRequire } from 'node:module';
 import type { ZoneResponse } from '@landscape-architect/shared';
 
-const require = createRequire(import.meta.url);
+import zipZonesRaw from '../data/zip-zones.json';
 
 interface ZipZoneEntry {
   zone: string;
@@ -10,10 +9,9 @@ interface ZipZoneEntry {
 
 type ZipZoneMap = Record<string, ZipZoneEntry>;
 
-let zipZoneData: ZipZoneMap | null = null;
+const zipZoneData = zipZonesRaw as ZipZoneMap;
 
 function loadData(): ZipZoneMap {
-  zipZoneData ??= require('../data/zip-zones.json') as ZipZoneMap;
   return zipZoneData;
 }
 
