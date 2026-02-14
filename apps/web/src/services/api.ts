@@ -2,6 +2,7 @@ import type {
   ZoneResponse,
   AnalysisResponse,
   PlantSearchResponse,
+  Plant,
 } from '@landscape-architect/shared';
 
 export async function lookupZone(zip: string): Promise<ZoneResponse> {
@@ -47,6 +48,15 @@ export async function searchPlants(params: Record<string, string>): Promise<Plan
     throw new ApiError(res.status, (body.error as string | undefined) ?? res.statusText);
   }
   return res.json() as Promise<PlantSearchResponse>;
+}
+
+export async function fetchPlant(id: string): Promise<Plant> {
+  const res = await fetch(`/api/v1/plants/${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new ApiError(res.status, (body.error as string | undefined) ?? res.statusText);
+  }
+  return res.json() as Promise<Plant>;
 }
 
 export class ApiError extends Error {

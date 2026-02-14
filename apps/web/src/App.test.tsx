@@ -60,7 +60,7 @@ describe('App', () => {
 
   it('renders plant detail page at /plants/:id', () => {
     renderWithRouter('/plants/rose-001');
-    expect(screen.getByRole('heading', { name: 'Plant Detail' })).toBeInTheDocument();
+    expect(screen.getByText('Loading plant...')).toBeInTheDocument();
   });
 });
 
