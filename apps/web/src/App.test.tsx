@@ -1,34 +1,75 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { App } from './App.js';
+import { LandingPage } from './pages/LandingPage.js';
+import { AnalyzePage } from './pages/AnalyzePage.js';
+import { ResultsPage } from './pages/ResultsPage.js';
+import { PlantsPage } from './pages/PlantsPage.js';
+import { PlantDetailPage } from './pages/PlantDetailPage.js';
+import { cn } from './lib/utils.js';
+
+function renderWithRouter(initialRoute = '/'): ReturnType<typeof render> {
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/',
+        element: <App />,
+        children: [
+          { index: true, element: <LandingPage /> },
+          { path: 'analyze', element: <AnalyzePage /> },
+          { path: 'analyze/:id', element: <ResultsPage /> },
+          { path: 'plants', element: <PlantsPage /> },
+          { path: 'plants/:id', element: <PlantDetailPage /> },
+        ],
+      },
+    ],
+    { initialEntries: [initialRoute] },
+  );
+
+  return render(<RouterProvider router={router} />);
+}
 
 describe('App', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
+  it('renders landing page at /', () => {
+    renderWithRouter('/');
+    expect(screen.getByText('Home')).toBeInTheDocument();
   });
 
-  it('renders the heading', () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({ status: 'healthy', timestamp: '2025-01-01T00:00:00Z', version: '0.0.1' }),
-      ),
-    );
-
-    render(<App />);
+  it('renders nav links', () => {
+    renderWithRouter('/');
     expect(screen.getByText('Landscape Architect')).toBeInTheDocument();
+    expect(screen.getByText('Analyze')).toBeInTheDocument();
+    expect(screen.getByText('Browse Plants')).toBeInTheDocument();
   });
 
-  it('displays health status after fetch', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({ status: 'healthy', timestamp: '2025-01-01T00:00:00Z', version: '0.0.1' }),
-      ),
-    );
+  it('renders analyze page at /analyze', () => {
+    renderWithRouter('/analyze');
+    expect(screen.getByRole('heading', { name: 'Analyze' })).toBeInTheDocument();
+  });
 
-    render(<App />);
+  it('renders results page at /analyze/:id', () => {
+    renderWithRouter('/analyze/abc-123');
+    expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('health-status')).toHaveTextContent('API Status: healthy');
-    });
+  it('renders plants page at /plants', () => {
+    renderWithRouter('/plants');
+    expect(screen.getByRole('heading', { name: 'Browse Plants' })).toBeInTheDocument();
+  });
+
+  it('renders plant detail page at /plants/:id', () => {
+    renderWithRouter('/plants/rose-001');
+    expect(screen.getByRole('heading', { name: 'Plant Detail' })).toBeInTheDocument();
+  });
+});
+
+describe('cn utility', () => {
+  it('merges class names', () => {
+    expect(cn('px-2', 'py-1')).toBe('px-2 py-1');
+  });
+
+  it('handles conflicting tailwind classes', () => {
+    expect(cn('px-2', 'px-4')).toBe('px-4');
   });
 });
