@@ -36,12 +36,9 @@ export class ApiStack extends Stack {
       timeout: Duration.seconds(30),
       memorySize: 512,
       bundling: {
-        format: nodejs.OutputFormat.ESM,
+        format: nodejs.OutputFormat.CJS,
         target: 'node20',
-        mainFields: ['module', 'main'],
         externalModules: ['@aws-sdk/*', 'sharp'],
-        banner:
-          "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
       },
       environment: {
         TABLE_NAME: tableName,

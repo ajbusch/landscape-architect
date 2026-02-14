@@ -10,8 +10,9 @@ async function bootstrap(): Promise<
 > {
   const awsLambdaFastify = (await import('@fastify/aws-lambda')).default;
   const app = await createApp({ logger: true });
+  const proxy = awsLambdaFastify(app);
   await app.ready();
-  return awsLambdaFastify(app);
+  return proxy;
 }
 
 export async function lambdaHandler(
