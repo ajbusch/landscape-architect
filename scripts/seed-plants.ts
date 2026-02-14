@@ -1,10 +1,9 @@
 #!/usr/bin/env npx tsx
 /**
  * Seed script for the plant database.
- * Reads from data/plants-seed.json, validates against PlantSchema,
- * and writes to DynamoDB using BatchWriteItem.
- *
- * Idempotent: uses PutItem which overwrites existing items with the same key.
+ * Reads from data/initial-seed.json, validates against PlantSchema,
+ * and writes to DynamoDB. Skips any plant that already exists in the table
+ * (DynamoDB is the source of truth, not the seed file).
  *
  * Usage: npx tsx scripts/seed-plants.ts [--table-name <name>]
  */
@@ -15,6 +14,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   BatchWriteCommand,
+  GetCommand,
   type BatchWriteCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 import { PlantSchema } from '@landscape-architect/shared';
@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   }
 
   // Read and validate seed data
-  const seedPath = resolve(__dirname, '..', 'data', 'plants-seed.json');
+  const seedPath = resolve(__dirname, '..', 'data', 'initial-seed.json');
   const rawData: unknown = JSON.parse(readFileSync(seedPath, 'utf-8'));
 
   if (!Array.isArray(rawData)) {
@@ -108,14 +108,38 @@ async function main(): Promise<void> {
 
   console.log(`Validated ${plants.length} plants`);
 
-  // Build all DynamoDB items
-  const allItems = plants.flatMap(buildDynamoItems);
-  console.log(`Writing ${allItems.length} items to table "${tableName}"`);
-
-  // Write in batches of 25 (DynamoDB limit)
   const client = new DynamoDBClient({});
   const docClient = DynamoDBDocumentClient.from(client);
 
+  // Check which plants already exist (by primary item)
+  const newPlants: Plant[] = [];
+  for (const plant of plants) {
+    const existing = await docClient.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: { PK: `PLANT#${plant.id}`, SK: `PLANT#${plant.id}` },
+        ProjectionExpression: 'PK',
+      }),
+    );
+    if (existing.Item) {
+      console.log(`  Skipping "${plant.commonName}" (already exists)`);
+    } else {
+      newPlants.push(plant);
+    }
+  }
+
+  if (newPlants.length === 0) {
+    console.log('All plants already exist in the table. Nothing to seed.');
+    return;
+  }
+
+  // Build DynamoDB items only for new plants
+  const allItems = newPlants.flatMap(buildDynamoItems);
+  console.log(
+    `Writing ${allItems.length} items for ${newPlants.length} new plants to table "${tableName}"`,
+  );
+
+  // Write in batches of 25 (DynamoDB limit)
   for (let i = 0; i < allItems.length; i += 25) {
     const batch = allItems.slice(i, i + 25);
     const params: BatchWriteCommandInput = {
@@ -130,7 +154,9 @@ async function main(): Promise<void> {
     console.log(`  Wrote batch ${Math.floor(i / 25) + 1} (${batch.length} items)`);
   }
 
-  console.log('Seed complete');
+  console.log(
+    `Seed complete. Added ${newPlants.length} new plants, skipped ${plants.length - newPlants.length} existing.`,
+  );
 }
 
 main().catch((err: unknown) => {
