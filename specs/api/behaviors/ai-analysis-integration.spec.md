@@ -240,7 +240,7 @@ const client = new Anthropic({
 
 const response = await client.messages.create({
   model: process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-20250514',
-  max_tokens: 2048,
+  max_tokens: 4096,
   system: SYSTEM_PROMPT,
   messages: [
     {
