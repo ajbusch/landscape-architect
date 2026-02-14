@@ -274,18 +274,18 @@ The AI response schema is different from the final API response schema. We need 
 
 ```typescript
 const AiAnalysisOutputSchema = z.object({
-  summary: z.string(),
+  summary: z.string().min(1).max(2000),
   yardSize: z.enum(['small', 'medium', 'large']),
   overallSunExposure: SunExposureSchema,
   estimatedSoilType: z.enum(['clay', 'sandy', 'loamy', 'silty', 'rocky', 'unknown']),
   features: z.array(
     z.object({
       type: IdentifiedFeatureSchema.shape.type,
-      label: z.string(),
-      species: z.string().optional(),
+      label: z.string().min(1).max(100),
+      species: z.string().max(100).optional(),
       confidence: ConfidenceLevelSchema,
       sunExposure: SunExposureSchema.optional(),
-      notes: z.string().optional(),
+      notes: z.string().max(500).optional(),
     }),
   ),
   recommendedPlantTypes: z.array(
@@ -293,16 +293,16 @@ const AiAnalysisOutputSchema = z.object({
       category: RecommendationCategorySchema,
       plantType: PlantSchema.shape.type,
       lightRequirement: SunExposureSchema,
-      reason: z.string(),
+      reason: z.string().min(1).max(500),
       searchCriteria: z.object({
-        type: z.string(),
-        light: z.string(),
-        tags: z.array(z.string()).optional(),
+        type: z.string().min(1).max(50),
+        light: z.string().min(1).max(50),
+        tags: z.array(z.string().max(50)).max(10).optional(),
       }),
     }),
   ),
   isValidYardPhoto: z.boolean(),
-  invalidPhotoReason: z.string().optional(),
+  invalidPhotoReason: z.string().max(500).optional(),
 });
 ```
 
