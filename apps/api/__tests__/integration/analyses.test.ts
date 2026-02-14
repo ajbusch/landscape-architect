@@ -22,8 +22,9 @@ vi.mock('../../src/services/secrets.js', () => ({
 vi.mock('../../src/services/photo.js', () => ({
   validatePhoto: vi.fn(),
   convertHeicToJpeg: vi.fn(),
-  uploadPhoto: vi.fn(),
   getPhotoPresignedUrl: vi.fn(),
+  getPhotoUploadUrl: vi.fn(),
+  downloadPhoto: vi.fn(),
   BUCKET_NAME: 'test-bucket',
 }));
 
@@ -38,7 +39,7 @@ vi.mock('../../src/services/plant-matcher.js', () => ({
 import { docClient } from '../../src/db.js';
 import { getZoneByZip } from '../../src/services/zone-lookup.js';
 import { getAnthropicApiKey } from '../../src/services/secrets.js';
-import { validatePhoto, uploadPhoto, getPhotoPresignedUrl } from '../../src/services/photo.js';
+import { validatePhoto, getPhotoPresignedUrl, downloadPhoto } from '../../src/services/photo.js';
 import { analyzeYardPhoto } from '../../src/services/claude-vision.js';
 import { matchPlants } from '../../src/services/plant-matcher.js';
 
@@ -46,8 +47,8 @@ const mockSend = docClient.send as unknown as Mock;
 const mockGetZoneByZip = getZoneByZip as unknown as Mock;
 const mockGetApiKey = getAnthropicApiKey as unknown as Mock;
 const mockValidatePhoto = validatePhoto as unknown as Mock;
-const mockUploadPhoto = uploadPhoto as unknown as Mock;
 const mockGetPresignedUrl = getPhotoPresignedUrl as unknown as Mock;
+const mockDownloadPhoto = downloadPhoto as unknown as Mock;
 const mockAnalyzeYard = analyzeYardPhoto as unknown as Mock;
 const mockMatchPlants = matchPlants as unknown as Mock;
 
@@ -113,25 +114,8 @@ const sampleRecommendations = [
   },
 ];
 
+// JPEG magic bytes
 const jpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Array(100).fill(0)]);
-
-function buildMultipartBody() {
-  const boundary = '----FormBoundary123';
-  const parts = [
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="yard.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
-    ),
-    jpegBuffer,
-    Buffer.from('\r\n'),
-    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="address"\r\n\r\n`),
-    Buffer.from(JSON.stringify({ zipCode: '28202' })),
-    Buffer.from(`\r\n--${boundary}--\r\n`),
-  ];
-  return {
-    body: Buffer.concat(parts),
-    contentType: `multipart/form-data; boundary=${boundary}`,
-  };
-}
 
 describe('Analysis integration flow', () => {
   let app: FastifyInstance;
@@ -158,19 +142,22 @@ describe('Analysis integration flow', () => {
     });
     mockGetZoneByZip.mockReturnValue(sampleZone);
     mockGetApiKey.mockResolvedValue('test-key');
-    mockUploadPhoto.mockResolvedValue('photos/anonymous/abc/original.jpg');
+    mockDownloadPhoto.mockResolvedValue(jpegBuffer);
     mockAnalyzeYard.mockResolvedValue({ ok: true, data: sampleAiOutput });
     mockMatchPlants.mockResolvedValue(sampleRecommendations);
     mockGetPresignedUrl.mockResolvedValue('https://s3.example.com/presigned');
     mockSend.mockResolvedValue({}); // DynamoDB PutCommand
 
-    const { body, contentType } = buildMultipartBody();
-
+    const analysisId = '55efd08d-b675-4cb2-a271-ecd2b7003501';
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/analyses',
-      headers: { 'content-type': contentType },
-      body,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        s3Key: `photos/anonymous/${analysisId}/original.jpg`,
+        analysisId,
+        address: { zipCode: '28202' },
+      }),
     });
 
     expect(response.statusCode).toBe(201);
@@ -194,18 +181,22 @@ describe('Analysis integration flow', () => {
     });
     mockGetZoneByZip.mockReturnValue(sampleZone);
     mockGetApiKey.mockResolvedValue('test-key');
-    mockUploadPhoto.mockResolvedValue('photos/anonymous/abc/original.jpg');
+    mockDownloadPhoto.mockResolvedValue(jpegBuffer);
     mockAnalyzeYard.mockResolvedValue({ ok: true, data: sampleAiOutput });
     mockMatchPlants.mockResolvedValue(sampleRecommendations);
     mockGetPresignedUrl.mockResolvedValue('https://s3.example.com/presigned');
     mockSend.mockResolvedValue({});
 
-    const { body, contentType } = buildMultipartBody();
+    const analysisId = '55efd08d-b675-4cb2-a271-ecd2b7003502';
     const postResponse = await app.inject({
       method: 'POST',
       url: '/api/v1/analyses',
-      headers: { 'content-type': contentType },
-      body,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        s3Key: `photos/anonymous/${analysisId}/original.jpg`,
+        analysisId,
+        address: { zipCode: '28202' },
+      }),
     });
 
     const created = JSON.parse(postResponse.body);
@@ -216,7 +207,7 @@ describe('Analysis integration flow', () => {
         PK: `ANALYSIS#${created.id as string}`,
         SK: `ANALYSIS#${created.id as string}`,
         ...created,
-        s3Key: 'photos/anonymous/abc/original.jpg',
+        s3Key: `photos/anonymous/${analysisId}/original.jpg`,
         ttl: Math.floor(Date.now() / 1000) + 86400,
       },
     });
