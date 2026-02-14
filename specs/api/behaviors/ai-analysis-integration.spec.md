@@ -22,8 +22,7 @@ User                    API                         S3              Claude Visio
  │                       │── upload photo ──────────▶│                    │                  │
  │                       │◀── pre-signed URL ───────│                    │                  │
  │                       │                          │                    │                  │
- │                       │── lookup zone ───────────────────────────────────────────────────▶│
- │                       │◀── zone data ────────────────────────────────────────────────────│
+ │                       │── lookup zone (in-memory) │                    │                  │
  │                       │                          │                    │                  │
  │                       │── send photo + prompt ──────────────────────▶│                  │
  │                       │◀── structured analysis ─────────────────────│                  │
@@ -57,15 +56,20 @@ User                    API                         S3              Claude Visio
 
 **Before AI call, resolve the ZIP to a USDA zone:**
 
-- Query DynamoDB: `PK=ZIP#{zipCode}` `SK=ZIP#{zipCode}`
+- Call `getZoneByZip(zipCode)` — a static in-memory lookup, no database call
 - If not found: return 404 with "ZIP code not found"
 - Pass the zone info to the AI prompt for context
 
-**USDA Zone data loading:**
+**USDA Zone data:**
 
-- The ZIP-to-zone mapping (~42,000 entries) should be seeded into DynamoDB
-- Source: USDA Plant Hardiness Zone Map data
-- Each entry: `{ PK: "ZIP#28202", SK: "ZIP#28202", zone: "7b", zoneNumber: 7, zoneLetter: "b", minTempF: 5, maxTempF: 10, description: "Average annual extreme minimum temperature 5 to 10 °F" }`
+- The ZIP-to-zone mapping (~42,000 entries) is bundled as a static JSON file at `apps/api/src/data/zip-zones.json`
+- Source: USDA Plant Hardiness Zone Map data via the [frostline](https://github.com/waldoj/frostline) project (PRISM Climate Group at Oregon State University)
+- This data is static (hardiness zones do not change) — no database storage needed
+- The JSON file loads into memory on Lambda cold start (~2-3MB) and lookups are sub-millisecond
+- The lookup function lives at `apps/api/src/services/zone-lookup.ts`
+- This data is API-only — it is NOT in `packages/shared` because the frontend doesn't need 42,000 ZIP codes bundled in the browser
+- Each entry shape: `{ zipCode: "28202", zone: "7b", zoneNumber: 7, zoneLetter: "b", minTempF: 5, maxTempF: 10, description: "Average annual extreme minimum temperature 5 to 10 °F" }`
+- The entry shape matches `ZoneResponseSchema` from `packages/shared/src/schemas/zone.ts`
 
 ---
 
