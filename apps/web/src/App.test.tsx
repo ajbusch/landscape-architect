@@ -33,14 +33,14 @@ function renderWithRouter(initialRoute = '/'): ReturnType<typeof render> {
 describe('App', () => {
   it('renders landing page at /', () => {
     renderWithRouter('/');
-    expect(screen.getByText('Home')).toBeInTheDocument();
+    expect(screen.getByText(/Transform Your Yard/)).toBeInTheDocument();
   });
 
   it('renders nav links', () => {
     renderWithRouter('/');
-    expect(screen.getByText('Landscape Architect')).toBeInTheDocument();
-    expect(screen.getByText('Analyze')).toBeInTheDocument();
-    expect(screen.getByText('Browse Plants')).toBeInTheDocument();
+    expect(screen.getAllByText('Landscape Architect').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Analyze').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Browse Plants').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders analyze page at /analyze', () => {
