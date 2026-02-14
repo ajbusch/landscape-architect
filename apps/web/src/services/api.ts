@@ -26,6 +26,15 @@ export async function submitAnalysis(photo: File, zipCode: string): Promise<Anal
   return res.json() as Promise<AnalysisResponse>;
 }
 
+export async function fetchAnalysis(id: string): Promise<AnalysisResponse> {
+  const res = await fetch(`/api/v1/analyses/${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new ApiError(res.status, (body.error as string | undefined) ?? res.statusText);
+  }
+  return res.json() as Promise<AnalysisResponse>;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
