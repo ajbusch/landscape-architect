@@ -39,12 +39,13 @@ All four must pass. CI also runs `pnpm test:contract`, `pnpm test:integration`, 
 ## Infrastructure (CDK)
 
 Stacks in `infra/lib/stacks/`. Each stack follows the pattern:
+
 - Interface extending `StackProps` with a `stage` prop
 - Tags: `Project=LandscapeArchitect`, `Stage={stage}`
 - Cross-stack values shared via `CfnOutput` with `exportName`
 
 Deploy: `cd infra && npx cdk deploy --all -c stage=dev`
-Synth:  `cd infra && npx cdk synth`
+Synth: `cd infra && npx cdk synth`
 
 ## Key Conventions
 
