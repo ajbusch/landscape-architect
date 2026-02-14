@@ -11,6 +11,7 @@ import type {
   Plant,
 } from '@landscape-architect/shared';
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Vite env types not resolvable in all configs
 const BASE_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api/v1';
 
 export class ApiError extends Error {
