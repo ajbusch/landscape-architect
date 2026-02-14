@@ -12,6 +12,7 @@ export interface AppOptions {
 export async function createApp(options: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options.logger ?? true,
+    bodyLimit: 10 * 1024 * 1024, // 10MB — matches API Gateway HTTP API hard limit
   });
 
   await app.register(cors);
