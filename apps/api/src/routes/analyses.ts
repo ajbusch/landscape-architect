@@ -51,10 +51,10 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       }
 
       if (!fileBuffer) {
-        return reply.status(400).send({ error: 'Photo is required' });
+        return await reply.status(400).send({ error: 'Photo is required' });
       }
       if (!addressJson) {
-        return reply.status(400).send({ error: 'Address is required' });
+        return await reply.status(400).send({ error: 'Address is required' });
       }
 
       photoBuffer = fileBuffer;
@@ -64,7 +64,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       try {
         addressData = JSON.parse(addressJson);
       } catch {
-        return reply.status(400).send({ error: 'Invalid address JSON' });
+        return await reply.status(400).send({ error: 'Invalid address JSON' });
       }
 
       if (
@@ -73,7 +73,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
         !('zipCode' in addressData) ||
         typeof (addressData as Record<string, unknown>).zipCode !== 'string'
       ) {
-        return reply.status(400).send({ error: 'zipCode is required in address' });
+        return await reply.status(400).send({ error: 'zipCode is required in address' });
       }
 
       zipCode = (addressData as { zipCode: string }).zipCode;
@@ -82,7 +82,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
         err instanceof Error &&
         err.message.includes('request file too large')
       ) {
-        return reply.status(413).send({ error: 'Image must be under 20MB' });
+        return await reply.status(413).send({ error: 'Image must be under 20MB' });
       }
       throw err;
     }
@@ -90,13 +90,13 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
     // ── 2. Validate photo via magic bytes ─────────────────────────────
     const validation = validatePhoto(photoBuffer);
     if (!validation.valid) {
-      return reply.status(400).send({ error: validation.error });
+      return await reply.status(400).send({ error: validation.error });
     }
 
     // ── 3. Resolve ZIP to zone ────────────────────────────────────────
     const zoneData = getZoneByZip(zipCode);
     if (!zoneData) {
-      return reply.status(404).send({ error: 'ZIP code not found' });
+      return await reply.status(404).send({ error: 'ZIP code not found' });
     }
 
     // ── 4. Validate secrets are accessible early ──────────────────────
@@ -122,7 +122,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       );
     } catch (err) {
       request.log.error(err, 'S3 upload failed');
-      return reply.status(500).send({ error: 'Failed to upload photo' });
+      return await reply.status(500).send({ error: 'Failed to upload photo' });
     }
 
     // ── 6. Convert HEIC → JPEG if needed, prepare base64 ─────────────
@@ -157,17 +157,17 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       const { error } = aiResult;
       switch (error.type) {
         case 'timeout':
-          return reply.status(504).send({ error: error.message });
+          return await reply.status(504).send({ error: error.message });
         case 'rate_limit':
-          return reply.status(429).send({ error: error.message });
+          return await reply.status(429).send({ error: error.message });
         default:
-          return reply.status(500).send({ error: 'AI analysis failed. Please try again.' });
+          return await reply.status(500).send({ error: 'AI analysis failed. Please try again.' });
       }
     }
 
     // ── 8. Check for invalid yard photo ───────────────────────────────
     if (!aiResult.data.isValidYardPhoto) {
-      return reply.status(422).send({
+      return await reply.status(422).send({
         error:
           aiResult.data.invalidPhotoReason ??
           "We couldn't identify a yard or garden in this photo.",
@@ -226,7 +226,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       }),
     );
 
-    return reply.status(201).send(analysisResponse);
+    return await reply.status(201).send(analysisResponse);
   });
 
   /**
@@ -245,7 +245,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       );
 
       if (!result.Item) {
-        return reply.status(404).send({ error: 'Analysis not found' });
+        return await reply.status(404).send({ error: 'Analysis not found' });
       }
 
       // Check if expired
@@ -253,7 +253,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       if (item.ttl && typeof item.ttl === 'number') {
         const now = Math.floor(Date.now() / 1000);
         if (item.ttl < now) {
-          return reply.status(404).send({ error: 'Analysis not found' });
+          return await reply.status(404).send({ error: 'Analysis not found' });
         }
       }
 
@@ -288,10 +288,10 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
           { issues: validated.error.issues },
           'Stored analysis failed schema validation',
         );
-        return reply.status(500).send({ error: 'Internal server error' });
+        return await reply.status(500).send({ error: 'Internal server error' });
       }
 
-      return reply.send(validated.data);
+      return await reply.send(validated.data);
     },
   );
 }

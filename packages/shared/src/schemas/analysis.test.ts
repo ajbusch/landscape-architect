@@ -200,7 +200,8 @@ describe('AiAnalysisOutputSchema', () => {
   });
 
   it('rejects missing required fields', () => {
-    const { summary: _, ...missingField } = validAiOutput;
+    const missingField = { ...validAiOutput } as Record<string, unknown>;
+    delete missingField.summary;
     expect(AiAnalysisOutputSchema.safeParse(missingField).success).toBe(false);
   });
 

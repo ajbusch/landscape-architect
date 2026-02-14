@@ -123,8 +123,10 @@ export async function analyzeYardPhoto(
       );
 
       // Extract text from response
-      const textBlock = response.content.find((block) => block.type === 'text');
-      if (!textBlock || textBlock.type !== 'text') {
+      const textBlock = response.content.find(
+        (block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text',
+      );
+      if (!textBlock) {
         return {
           ok: false,
           error: { type: 'invalid_response', message: 'No text in Claude response' },
