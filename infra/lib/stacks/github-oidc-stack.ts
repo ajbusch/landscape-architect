@@ -118,7 +118,7 @@ export class GitHubOidcStack extends Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
-        resources: ['arn:aws:iam::*:secret:LandscapeArchitect/*'],
+        resources: ['arn:aws:secretsmanager:*:*:secret:LandscapeArchitect/*'],
       }),
     );
 
