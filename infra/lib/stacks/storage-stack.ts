@@ -23,11 +23,7 @@ export class StorageStack extends Stack {
       enforceSSL: true,
       cors: [
         {
-          allowedMethods: [
-            s3.HttpMethods.GET,
-            s3.HttpMethods.PUT,
-            s3.HttpMethods.POST,
-          ],
+          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.PUT, s3.HttpMethods.POST],
           allowedOrigins: [frontendOrigin],
           allowedHeaders: ['*'],
           exposedHeaders: ['ETag'],
