@@ -29,7 +29,7 @@ export class StorageStack extends Stack {
           exposedHeaders: ['ETag'],
         },
       ],
-      lifecycleRules: [{ prefix: 'anonymous/', expiration: Duration.days(1) }],
+      lifecycleRules: [{ prefix: 'photos/anonymous/', expiration: Duration.days(1) }],
       removalPolicy: isProd ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
     });
 

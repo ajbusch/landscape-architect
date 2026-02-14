@@ -56,7 +56,7 @@ describe('StorageStack', () => {
       LifecycleConfiguration: Match.objectLike({
         Rules: Match.arrayWith([
           Match.objectLike({
-            Prefix: 'anonymous/',
+            Prefix: 'photos/anonymous/',
             ExpirationInDays: 1,
             Status: 'Enabled',
           }),
