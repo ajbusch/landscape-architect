@@ -5,7 +5,7 @@ const client = new SecretsManagerClient({});
 /** Cached API key — persists for Lambda lifecycle. */
 let cachedApiKey: string | null = null;
 
-const SECRET_NAME = process.env.ANTHROPIC_SECRET_NAME ?? 'LandscapeArchitect/dev/AnthropicApiKey';
+const SECRET_NAME = process.env.SECRET_ARN ?? 'LandscapeArchitect/dev/AnthropicApiKey';
 
 export async function getAnthropicApiKey(): Promise<string> {
   if (cachedApiKey) return cachedApiKey;
