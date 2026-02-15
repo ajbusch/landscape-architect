@@ -43,7 +43,7 @@ export class ApiStack extends Stack {
           beforeBundling: () => [],
           beforeInstall: () => [],
           afterBundling: (_inputDir: string, outputDir: string) => [
-            `cd ${outputDir} && npm install --no-save --os=linux --cpu=arm64 sharp`,
+            `cd ${outputDir} && npm install --no-save --force sharp @img/sharp-linux-arm64`,
           ],
         },
       },
