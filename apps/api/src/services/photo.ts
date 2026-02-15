@@ -75,7 +75,7 @@ export async function convertHeicToJpeg(buffer: Buffer): Promise<Buffer> {
  * Base64 inflates ~33%, so raw bytes must stay under ~3.75 MB.
  * Resize progressively until the image fits.
  */
-const MAX_AI_IMAGE_BYTES = 3_750_000;
+const MAX_AI_IMAGE_BYTES = 1_500_000;
 
 export async function resizeForApi(
   buffer: Buffer,
