@@ -34,7 +34,7 @@ export class ApiStack extends Stack {
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
       timeout: Duration.seconds(30),
-      memorySize: 512,
+      memorySize: 1024,
       bundling: {
         format: nodejs.OutputFormat.CJS,
         target: 'node20',

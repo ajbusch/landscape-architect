@@ -15,9 +15,9 @@ describe('ApiStack', () => {
     template.resourceCountIs('AWS::Lambda::Function', 1);
   });
 
-  it('configures 512MB memory and 30s timeout', () => {
+  it('configures 1024MB memory and 30s timeout', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
-      MemorySize: 512,
+      MemorySize: 1024,
       Timeout: 30,
     });
   });
