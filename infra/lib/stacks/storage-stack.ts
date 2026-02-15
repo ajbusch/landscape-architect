@@ -15,7 +15,15 @@ export class StorageStack extends Stack {
     super(scope, id, props);
 
     const isProd = props.stage === 'prod';
-    const frontendOrigin = isProd ? 'https://landscapearchitect.app' : 'http://localhost:5173';
+
+    const cloudfrontOrigins = [
+      'https://d2jp0cpr1bn6fp.cloudfront.net', // dev
+      'https://d3734vo7rulmf3.cloudfront.net', // staging
+      'https://d5hj1rpwk1mpl.cloudfront.net', // prod
+    ];
+    const allowedOrigins = isProd
+      ? cloudfrontOrigins
+      : [...cloudfrontOrigins, 'http://localhost:5173', 'http://localhost:3000'];
 
     const bucket = new s3.Bucket(this, 'PhotoBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -24,8 +32,15 @@ export class StorageStack extends Stack {
       cors: [
         {
           allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.PUT, s3.HttpMethods.POST],
-          allowedOrigins: [frontendOrigin],
-          allowedHeaders: ['*'],
+          allowedOrigins: allowedOrigins,
+          allowedHeaders: [
+            'Content-Type',
+            'x-amz-acl',
+            'x-amz-content-sha256',
+            'x-amz-date',
+            'x-amz-security-token',
+            'x-amz-user-agent',
+          ],
           exposedHeaders: ['ETag'],
         },
       ],

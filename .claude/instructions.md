@@ -11,6 +11,24 @@ Before pushing any branch or opening a PR:
 
 Never push code with known failing tests.
 
+## Debugging Deployed Services
+
+When fixing Lambda or API issues:
+
+1. Check Lambda logs: `aws logs tail /aws/lambda/FUNCTION_NAME --since 10m --format short`
+2. List Lambda functions: `aws lambda list-functions --query 'Functions[?contains(FunctionName, `LandscapeArchitect`)].FunctionName' --output text`
+3. Test API endpoints: `curl -s https://CLOUDFRONT_URL/api/v1/zones/22903`
+4. Check stack outputs: `aws cloudformation describe-stacks --stack-name STACK_NAME --query 'Stacks[0].Outputs'`
+5. After deploying a fix, verify the Lambda starts and the endpoint responds before opening a PR.
+
+## Verifying Deployments
+
+After deploying, verify it works end-to-end:
+
+1. Run a quick smoke test: `curl -s -o /dev/null -w '%{http_code}' https://d2jp0cpr1bn6fp.cloudfront.net/api/v1/zones/22903`
+2. For API-only issues, use curl to test endpoints directly
+3. For frontend issues, use Playwright against the deployed dev URL
+
 ## Code Standards
 
 - All inputs validated with Zod schemas from packages/shared — never trust raw input
