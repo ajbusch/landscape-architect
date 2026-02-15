@@ -85,7 +85,7 @@ export async function resizeForApi(
 
   const sharp = (await import('sharp')).default;
   const metadata = await sharp(buffer).metadata();
-  const width = metadata.width ?? 4096;
+  const width = metadata.width;
 
   // Try progressively smaller widths
   const targets = [2048, 1536, 1024];
