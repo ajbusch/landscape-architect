@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import multipart from '@fastify/multipart';
 import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
   AnalysisResponseSchema,
@@ -12,8 +11,9 @@ import { getZoneByZip } from '../services/zone-lookup.js';
 import {
   validatePhoto,
   convertHeicToJpeg,
-  uploadPhoto,
   getPhotoPresignedUrl,
+  getPhotoUploadUrl,
+  downloadPhoto,
 } from '../services/photo.js';
 import { analyzeYardPhoto } from '../services/claude-vision.js';
 import { matchPlants } from '../services/plant-matcher.js';
@@ -21,82 +21,59 @@ import { getAnthropicApiKey } from '../services/secrets.js';
 
 const SEVEN_DAYS_S = 7 * 24 * 60 * 60;
 
-export async function analysesRoute(app: FastifyInstance): Promise<void> {
-  await app.register(multipart, {
-    limits: {
-      fileSize: 20 * 1024 * 1024, // 20MB
-      files: 1,
-    },
+const CONTENT_TYPE_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+  'image/heif': 'heic',
+};
+
+export function analysesRoute(app: FastifyInstance): void {
+  /**
+   * POST /api/v1/analyses/upload-url — get a pre-signed S3 PUT URL for direct upload.
+   */
+  app.post<{
+    Body: { contentType: string };
+  }>('/api/v1/analyses/upload-url', async (request, reply) => {
+    const { contentType } = request.body;
+    const ext = CONTENT_TYPE_TO_EXT[contentType];
+
+    if (!ext) {
+      return await reply
+        .status(400)
+        .send({ error: 'Unsupported content type. Use image/jpeg, image/png, or image/heic.' });
+    }
+
+    const analysisId = randomUUID();
+    const { uploadUrl, s3Key } = await getPhotoUploadUrl(analysisId, contentType, ext);
+
+    return await reply.send({ uploadUrl, s3Key, analysisId });
   });
 
   /**
-   * POST /api/v1/analyses — create a new yard analysis.
+   * POST /api/v1/analyses — create a new yard analysis from an S3 key.
    */
-  app.post('/api/v1/analyses', async (request, reply) => {
-    // ── 1. Parse multipart form data ──────────────────────────────────
-    let photoBuffer: Buffer;
-    let zipCode: string;
+  app.post<{
+    Body: { s3Key: string; analysisId: string; address?: { zipCode?: string } };
+  }>('/api/v1/analyses', async (request, reply) => {
+    const { s3Key, analysisId, address } = request.body;
 
-    try {
-      const parts = request.parts();
-      let fileBuffer: Buffer | null = null;
-      let addressJson: string | null = null;
-
-      for await (const part of parts) {
-        if (part.type === 'file' && part.fieldname === 'photo') {
-          fileBuffer = await part.toBuffer();
-        } else if (part.type === 'field' && part.fieldname === 'address') {
-          addressJson = part.value as string;
-        }
-      }
-
-      if (!fileBuffer) {
-        return await reply.status(400).send({ error: 'Photo is required' });
-      }
-      if (!addressJson) {
-        return await reply.status(400).send({ error: 'Address is required' });
-      }
-
-      photoBuffer = fileBuffer;
-
-      // Parse address JSON
-      let addressData: unknown;
-      try {
-        addressData = JSON.parse(addressJson);
-      } catch {
-        return await reply.status(400).send({ error: 'Invalid address JSON' });
-      }
-
-      if (
-        !addressData ||
-        typeof addressData !== 'object' ||
-        !('zipCode' in addressData) ||
-        typeof (addressData as Record<string, unknown>).zipCode !== 'string'
-      ) {
-        return await reply.status(400).send({ error: 'zipCode is required in address' });
-      }
-
-      zipCode = (addressData as { zipCode: string }).zipCode;
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('request file too large')) {
-        return await reply.status(413).send({ error: 'Image must be under 20MB' });
-      }
-      throw err;
+    if (!s3Key || !analysisId) {
+      return await reply.status(400).send({ error: 's3Key and analysisId are required' });
+    }
+    if (!address?.zipCode) {
+      return await reply.status(400).send({ error: 'address.zipCode is required' });
     }
 
-    // ── 2. Validate photo via magic bytes ─────────────────────────────
-    const validation = validatePhoto(photoBuffer);
-    if (!validation.valid) {
-      return await reply.status(400).send({ error: validation.error });
-    }
+    const { zipCode } = address;
 
-    // ── 3. Resolve ZIP to zone ────────────────────────────────────────
+    // ── 1. Resolve ZIP to zone ────────────────────────────────────────
     const zoneData = getZoneByZip(zipCode);
     if (!zoneData) {
       return await reply.status(404).send({ error: 'ZIP code not found' });
     }
 
-    // ── 4. Validate secrets are accessible early ──────────────────────
+    // ── 2. Validate secrets are accessible early ──────────────────────
     try {
       await getAnthropicApiKey();
     } catch (err) {
@@ -106,18 +83,21 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
         .send({ error: 'Internal server error: unable to initialize AI service' });
     }
 
-    // ── 5. Generate analysis ID and upload photo to S3 ────────────────
-    const analysisId = randomUUID();
-    let s3Key: string;
-
+    // ── 3. Download photo from S3 and validate ────────────────────────
+    let photoBuffer: Buffer;
     try {
-      s3Key = await uploadPhoto(analysisId, photoBuffer, validation.ext, validation.mediaType);
+      photoBuffer = await downloadPhoto(s3Key);
     } catch (err) {
-      request.log.error(err, 'S3 upload failed');
-      return await reply.status(500).send({ error: 'Failed to upload photo' });
+      request.log.error(err, 'Failed to download photo from S3');
+      return await reply.status(400).send({ error: 'Photo not found. Please re-upload.' });
     }
 
-    // ── 6. Convert HEIC → JPEG if needed, prepare base64 ─────────────
+    const validation = validatePhoto(photoBuffer);
+    if (!validation.valid) {
+      return await reply.status(400).send({ error: validation.error });
+    }
+
+    // ── 4. Convert HEIC → JPEG if needed, prepare base64 ─────────────
     let aiPhotoBuffer = photoBuffer;
     let aiMediaType: 'image/jpeg' | 'image/png' = 'image/jpeg';
 
@@ -137,7 +117,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
 
     const base64Photo = aiPhotoBuffer.toString('base64');
 
-    // ── 7. Call Claude Vision API ─────────────────────────────────────
+    // ── 5. Call Claude Vision API ─────────────────────────────────────
     const aiResult = await analyzeYardPhoto(
       base64Photo,
       aiMediaType,
@@ -157,7 +137,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       }
     }
 
-    // ── 8. Check for invalid yard photo ───────────────────────────────
+    // ── 6. Check for invalid yard photo ───────────────────────────────
     if (!aiResult.data.isValidYardPhoto) {
       return await reply.status(422).send({
         error:
@@ -166,19 +146,19 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // ── 9. Match plant types to real plants ───────────────────────────
+    // ── 7. Match plant types to real plants ───────────────────────────
     const recommendations = await matchPlants(aiResult.data, zoneData.zone);
 
-    // ── 10. Assemble features with IDs ────────────────────────────────
+    // ── 8. Assemble features with IDs ────────────────────────────────
     const features: IdentifiedFeature[] = aiResult.data.features.map((f) => ({
       ...f,
       id: randomUUID(),
     }));
 
-    // ── 11. Generate pre-signed URL ───────────────────────────────────
+    // ── 9. Generate pre-signed URL ───────────────────────────────────
     const photoUrl = await getPhotoPresignedUrl(s3Key);
 
-    // ── 12. Assemble response ─────────────────────────────────────────
+    // ── 10. Assemble response ─────────────────────────────────────────
     const now = new Date();
     const expiresAt = new Date(now.getTime() + SEVEN_DAYS_S * 1000);
 
@@ -202,7 +182,7 @@ export async function analysesRoute(app: FastifyInstance): Promise<void> {
       expiresAt: expiresAt.toISOString(),
     };
 
-    // ── 13. Store in DynamoDB with TTL ────────────────────────────────
+    // ── 11. Store in DynamoDB with TTL ────────────────────────────────
     const ttl = Math.floor(expiresAt.getTime() / 1000);
 
     await docClient.send(

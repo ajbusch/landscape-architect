@@ -3,7 +3,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const s3 = new S3Client({});
 
-export const BUCKET_NAME = process.env.PHOTO_BUCKET ?? '';
+export const BUCKET_NAME = process.env.BUCKET_NAME ?? '';
 
 /** Supported image types identified via magic bytes. */
 type ImageType = 'jpeg' | 'png' | 'heic';
@@ -92,6 +92,53 @@ export async function uploadPhoto(
   );
 
   return key;
+}
+
+/**
+ * Generate a pre-signed PUT URL for direct browser upload to S3.
+ */
+export async function getPhotoUploadUrl(
+  analysisId: string,
+  contentType: string,
+  ext: string,
+): Promise<{ uploadUrl: string; s3Key: string }> {
+  const s3Key = `photos/anonymous/${analysisId}/original.${ext}`;
+
+  const uploadUrl = await getSignedUrl(
+    s3,
+    new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: s3Key,
+      ContentType: contentType,
+      ServerSideEncryption: 'AES256',
+    }),
+    { expiresIn: 300 }, // 5 minutes
+  );
+
+  return { uploadUrl, s3Key };
+}
+
+/**
+ * Download a photo from S3 into a buffer.
+ */
+export async function downloadPhoto(s3Key: string): Promise<Buffer> {
+  const result = await s3.send(
+    new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: s3Key,
+    }),
+  );
+
+  const stream = result.Body;
+  if (!stream) {
+    throw new Error('Empty response body from S3');
+  }
+
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 /**

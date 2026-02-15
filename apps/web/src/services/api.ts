@@ -38,13 +38,41 @@ export async function lookupZone(zip: string): Promise<ZoneResponse> {
 }
 
 export async function submitAnalysis(photo: File, zipCode: string): Promise<AnalysisResponse> {
-  const formData = new FormData();
-  formData.append('photo', photo);
-  formData.append('address', JSON.stringify({ zipCode }));
+  // Step 1: Get a presigned S3 upload URL
+  const contentType = photo.type || 'image/jpeg';
+  const uploadRes = await fetch(`${BASE_URL}/analyses/upload-url`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contentType }),
+  });
 
+  if (!uploadRes.ok) {
+    const message = await extractErrorMessage(uploadRes);
+    throw new ApiError(uploadRes.status, message || 'Failed to get upload URL.');
+  }
+
+  const { uploadUrl, s3Key, analysisId } = (await uploadRes.json()) as {
+    uploadUrl: string;
+    s3Key: string;
+    analysisId: string;
+  };
+
+  // Step 2: Upload photo directly to S3
+  const s3Res = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': contentType },
+    body: photo,
+  });
+
+  if (!s3Res.ok) {
+    throw new ApiError(s3Res.status, 'Failed to upload photo. Please try again.');
+  }
+
+  // Step 3: Submit analysis with the S3 key
   const res = await fetch(`${BASE_URL}/analyses`, {
     method: 'POST',
-    body: formData,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ s3Key, analysisId, address: { zipCode } }),
   });
 
   if (!res.ok) {
