@@ -21,9 +21,19 @@ export class StorageStack extends Stack {
       'https://d3734vo7rulmf3.cloudfront.net', // staging
       'https://d5hj1rpwk1mpl.cloudfront.net', // prod
     ];
+    const customDomainOrigins = [
+      'https://dev.landscaper.cloud',
+      'https://staging.landscaper.cloud',
+      'https://landscaper.cloud',
+    ];
     const allowedOrigins = isProd
-      ? cloudfrontOrigins
-      : [...cloudfrontOrigins, 'http://localhost:5173', 'http://localhost:3000'];
+      ? [...cloudfrontOrigins, ...customDomainOrigins]
+      : [
+          ...cloudfrontOrigins,
+          ...customDomainOrigins,
+          'http://localhost:5173',
+          'http://localhost:3000',
+        ];
 
     const bucket = new s3.Bucket(this, 'PhotoBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
