@@ -38,7 +38,14 @@ export class ApiStack extends Stack {
       bundling: {
         format: nodejs.OutputFormat.CJS,
         target: 'node20',
-        externalModules: ['@aws-sdk/*'],
+        externalModules: ['@aws-sdk/*', 'sharp'],
+        commandHooks: {
+          beforeBundling: () => [],
+          beforeInstall: () => [],
+          afterBundling: (_inputDir: string, outputDir: string) => [
+            `cd ${outputDir} && npm install --no-save --os=linux --cpu=arm64 sharp`,
+          ],
+        },
       },
       environment: {
         TABLE_NAME: tableName,
