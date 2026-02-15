@@ -71,6 +71,39 @@ export async function convertHeicToJpeg(buffer: Buffer): Promise<Buffer> {
 }
 
 /**
+ * Anthropic API enforces a 5 MB limit on base64-encoded images.
+ * Base64 inflates ~33%, so raw bytes must stay under ~3.75 MB.
+ * Resize progressively until the image fits.
+ */
+const MAX_AI_IMAGE_BYTES = 3_750_000;
+
+export async function resizeForApi(
+  buffer: Buffer,
+  mediaType: 'image/jpeg' | 'image/png',
+): Promise<Buffer> {
+  if (buffer.length <= MAX_AI_IMAGE_BYTES) return buffer;
+
+  const sharp = (await import('sharp')).default;
+  const metadata = await sharp(buffer).metadata();
+  const width = metadata.width;
+
+  // Try progressively smaller widths
+  const targets = [2048, 1536, 1024];
+  for (const targetWidth of targets) {
+    if (width <= targetWidth) continue;
+    const resized = await sharp(buffer)
+      .resize({ width: targetWidth, withoutEnlargement: true })
+      [mediaType === 'image/png' ? 'png' : 'jpeg']({ quality: 85 })
+      .toBuffer();
+    if (resized.length <= MAX_AI_IMAGE_BYTES) return resized;
+    buffer = resized;
+  }
+
+  // Last resort: aggressive JPEG compression at current size
+  return sharp(buffer).jpeg({ quality: 70 }).toBuffer();
+}
+
+/**
  * Upload photo to S3.
  */
 export async function uploadPhoto(
