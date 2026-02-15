@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { HealthResponseSchema } from '../schemas/health.js';
+import { HEALTH_STATUS } from '../constants/index.js';
 
 describe('HealthResponseSchema', () => {
   it('accepts a valid healthy response', () => {
     const result = HealthResponseSchema.safeParse({
-      status: 'healthy',
+      status: HEALTH_STATUS.HEALTHY,
       timestamp: '2025-01-01T00:00:00Z',
       version: '0.0.1',
     });
@@ -13,7 +14,7 @@ describe('HealthResponseSchema', () => {
 
   it('accepts degraded status', () => {
     const result = HealthResponseSchema.safeParse({
-      status: 'degraded',
+      status: HEALTH_STATUS.DEGRADED,
       timestamp: '2025-06-15T12:30:00Z',
       version: '1.2.3',
     });
@@ -31,7 +32,7 @@ describe('HealthResponseSchema', () => {
 
   it('rejects invalid timestamp format', () => {
     const result = HealthResponseSchema.safeParse({
-      status: 'healthy',
+      status: HEALTH_STATUS.HEALTHY,
       timestamp: 'not-a-date',
       version: '0.0.1',
     });
@@ -40,7 +41,7 @@ describe('HealthResponseSchema', () => {
 
   it('rejects empty version string', () => {
     const result = HealthResponseSchema.safeParse({
-      status: 'healthy',
+      status: HEALTH_STATUS.HEALTHY,
       timestamp: '2025-01-01T00:00:00Z',
       version: '',
     });

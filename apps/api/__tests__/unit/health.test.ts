@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createApp } from '../../src/app.js';
+import { HEALTH_STATUS } from '@landscape-architect/shared';
 import type { FastifyInstance } from 'fastify';
 
 describe('GET /health', () => {
@@ -22,7 +23,7 @@ describe('GET /health', () => {
     expect(response.statusCode).toBe(200);
 
     const body = JSON.parse(response.body);
-    expect(body.status).toBe('healthy');
+    expect(body.status).toBe(HEALTH_STATUS.HEALTHY);
     expect(body.version).toBeDefined();
     expect(body.timestamp).toBeDefined();
   });
