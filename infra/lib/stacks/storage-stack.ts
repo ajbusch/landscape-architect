@@ -39,6 +39,7 @@ export class StorageStack extends Stack {
             'x-amz-content-sha256',
             'x-amz-date',
             'x-amz-security-token',
+            'x-amz-server-side-encryption',
             'x-amz-user-agent',
           ],
           exposedHeaders: ['ETag'],

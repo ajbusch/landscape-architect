@@ -18,7 +18,7 @@ export function _resetClient(): void {
 }
 
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-20250514';
-const CLAUDE_TIMEOUT = 30_000; // 30 seconds
+const CLAUDE_TIMEOUT = 25_000; // 25 seconds (leaves headroom for S3 download + API Gateway 30s limit)
 
 const SYSTEM_PROMPT = `You are an expert landscape architect and horticulturist analyzing a homeowner's yard photo. You provide actionable, specific analysis with plant recommendations tailored to the user's USDA hardiness zone.
 

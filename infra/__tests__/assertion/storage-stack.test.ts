@@ -78,7 +78,11 @@ describe('StorageStack', () => {
               'http://localhost:5173',
               'http://localhost:3000',
             ]),
-            AllowedHeaders: Match.arrayWith(['Content-Type', 'x-amz-content-sha256']),
+            AllowedHeaders: Match.arrayWith([
+              'Content-Type',
+              'x-amz-content-sha256',
+              'x-amz-server-side-encryption',
+            ]),
             ExposedHeaders: ['ETag'],
           }),
         ]),

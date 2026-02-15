@@ -95,7 +95,7 @@ describe('analyzeYardPhoto', () => {
           },
         ],
       }),
-      expect.objectContaining({ timeout: 30000 }),
+      expect.objectContaining({ timeout: 25000 }),
     );
   });
 
