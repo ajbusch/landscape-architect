@@ -71,8 +71,14 @@ describe('StorageStack', () => {
         CorsRules: Match.arrayWith([
           Match.objectLike({
             AllowedMethods: Match.arrayWith(['GET', 'PUT', 'POST']),
-            AllowedOrigins: Match.arrayWith(['http://localhost:5173']),
-            AllowedHeaders: ['*'],
+            AllowedOrigins: Match.arrayWith([
+              'https://d2jp0cpr1bn6fp.cloudfront.net',
+              'https://d3734vo7rulmf3.cloudfront.net',
+              'https://d5hj1rpwk1mpl.cloudfront.net',
+              'http://localhost:5173',
+              'http://localhost:3000',
+            ]),
+            AllowedHeaders: Match.arrayWith(['Content-Type', 'x-amz-content-sha256']),
             ExposedHeaders: ['ETag'],
           }),
         ]),
