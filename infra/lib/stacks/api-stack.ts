@@ -38,7 +38,7 @@ export class ApiStack extends Stack {
       bundling: {
         format: nodejs.OutputFormat.CJS,
         target: 'node20',
-        externalModules: ['@aws-sdk/*', 'sharp'],
+        externalModules: ['@aws-sdk/*'],
       },
       environment: {
         TABLE_NAME: tableName,
