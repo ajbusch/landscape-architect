@@ -60,7 +60,10 @@ export async function submitAnalysis(photo: File, zipCode: string): Promise<Anal
   // Step 2: Upload photo directly to S3
   const s3Res = await fetch(uploadUrl, {
     method: 'PUT',
-    headers: { 'Content-Type': contentType },
+    headers: {
+      'Content-Type': contentType,
+      'x-amz-server-side-encryption': 'AES256',
+    },
     body: photo,
   });
 

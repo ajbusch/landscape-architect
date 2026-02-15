@@ -38,6 +38,7 @@ export class FrontendStack extends Stack {
           origin: new origins.HttpOrigin(apiDomainName, {
             protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
             originPath: '',
+            readTimeout: Duration.seconds(60),
           }),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
