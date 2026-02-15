@@ -11,6 +11,7 @@ import { getZoneByZip } from '../services/zone-lookup.js';
 import {
   validatePhoto,
   convertHeicToJpeg,
+  resizeForApi,
   getPhotoPresignedUrl,
   getPhotoUploadUrl,
   downloadPhoto,
@@ -114,6 +115,9 @@ export function analysesRoute(app: FastifyInstance): void {
     } else if (validation.type === 'png') {
       aiMediaType = 'image/png';
     }
+
+    // ── 4b. Resize if too large for Anthropic API (5 MB base64 limit) ─
+    aiPhotoBuffer = await resizeForApi(aiPhotoBuffer, aiMediaType);
 
     const base64Photo = aiPhotoBuffer.toString('base64');
 

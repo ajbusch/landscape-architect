@@ -21,6 +21,7 @@ vi.mock('../../src/services/secrets.js', () => ({
 vi.mock('../../src/services/photo.js', () => ({
   validatePhoto: vi.fn(),
   convertHeicToJpeg: vi.fn(),
+  resizeForApi: vi.fn((buf: Buffer) => Promise.resolve(buf)),
   uploadPhoto: vi.fn(),
   getPhotoPresignedUrl: vi.fn(),
   getPhotoUploadUrl: vi.fn(),
