@@ -8,9 +8,9 @@
 
 Before pushing any branch or opening a PR:
 
-1. Run `pnpm format:check`, `pnpm lint --force`, `pnpm typecheck`, and `pnpm test:unit`
+1. Run `pnpm format:check`, `pnpm lint --force`, `pnpm typecheck`, `pnpm test:unit`, and `pnpm lint:secrets`
 2. If any fail, fix the errors (`pnpm format` auto-fixes formatting) and re-run
-3. Keep iterating until all four pass clean
+3. Keep iterating until all five pass clean
 4. Commit your changes
 5. Push the branch and open a PR
 6. After pushing, monitor CI with `gh run watch`. If CI fails, pull the logs, fix the issue, push again, and repeat until CI is green.
