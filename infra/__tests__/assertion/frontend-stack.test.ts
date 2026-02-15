@@ -14,6 +14,9 @@ describe('FrontendStack', () => {
   const stack = new FrontendStack(app, 'TestFrontend', {
     stage: 'dev',
     apiUrl: 'https://abc123.execute-api.us-east-1.amazonaws.com/',
+    domainName: 'dev.landscaper.cloud',
+    hostedZoneId: 'Z1234567890ABC',
+    certificateArn: 'arn:aws:acm:us-east-1:111111111111:certificate/test-cert-id',
     webAssetPath,
     env: { account: '111111111111', region: 'us-east-1' },
   });
@@ -109,6 +112,35 @@ describe('FrontendStack', () => {
 
   it('uses OAC for S3 origin', () => {
     template.resourceCountIs('AWS::CloudFront::OriginAccessControl', 1);
+  });
+
+  it('has an alternate domain name on CloudFront', () => {
+    template.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        Aliases: ['dev.landscaper.cloud'],
+      }),
+    });
+  });
+
+  it('has an ACM certificate attached to CloudFront', () => {
+    template.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        ViewerCertificate: Match.objectLike({
+          AcmCertificateArn: 'arn:aws:acm:us-east-1:111111111111:certificate/test-cert-id',
+          SslSupportMethod: 'sni-only',
+        }),
+      }),
+    });
+  });
+
+  it('creates a Route 53 A record', () => {
+    template.hasResourceProperties('AWS::Route53::RecordSet', {
+      Type: 'A',
+      Name: 'dev.landscaper.cloud.',
+      AliasTarget: Match.objectLike({
+        DNSName: Match.anyValue(),
+      }),
+    });
   });
 
   it('tags resources with project and stage', () => {
