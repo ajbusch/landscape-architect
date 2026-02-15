@@ -18,9 +18,10 @@ pnpm lint --force   # --force bypasses Turborepo cache
 pnpm typecheck
 pnpm format:check   # fix with: pnpm format
 pnpm test:unit
+pnpm lint:secrets
 ```
 
-All four must pass. CI also runs `pnpm test:contract`, `pnpm test:integration`, and `pnpm format:check`.
+All five must pass. CI also runs `pnpm test:contract`, `pnpm test:integration`, and `pnpm format:check`.
 
 ## Code Style
 
