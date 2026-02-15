@@ -133,6 +133,10 @@ export function analysesRoute(app: FastifyInstance): void {
         case 'rate_limit':
           return await reply.status(429).send({ error: error.message });
         default:
+          request.log.error(
+            { errorType: error.type, errorMessage: error.message },
+            'AI analysis failed',
+          );
           return await reply.status(500).send({ error: 'AI analysis failed. Please try again.' });
       }
     }
