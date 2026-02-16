@@ -97,7 +97,7 @@ export const AnalysisResultSchema = z.object({
   overallSunExposure: SunExposureSchema,
   estimatedSoilType: z.enum(['clay', 'sandy', 'loamy', 'silty', 'rocky', 'unknown']),
   features: z.array(IdentifiedFeatureSchema),
-  recommendations: z.array(PlantRecommendationSchema).min(1).max(10),
+  recommendations: z.array(PlantRecommendationSchema).max(10),
 });
 
 export type AnalysisResult = z.infer<typeof AnalysisResultSchema>;
