@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -6,7 +6,7 @@ import { ResultsPage } from './ResultsPage.js';
 import type { AnalysisResponse } from '@landscape-architect/shared';
 
 vi.mock('@/services/api', () => ({
-  fetchAnalysis: vi.fn(),
+  pollAnalysis: vi.fn(),
   ApiError: class ApiError extends Error {
     status: number;
     constructor(status: number, message: string) {
@@ -21,7 +21,7 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn() },
 }));
 
-import { fetchAnalysis, ApiError } from '@/services/api';
+import { pollAnalysis, ApiError } from '@/services/api';
 import { toast } from 'sonner';
 
 const MOCK_ANALYSIS: AnalysisResponse = {
@@ -114,12 +114,22 @@ function renderResultsPage(id = 'test-id'): ReturnType<typeof render> {
 describe('ResultsPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    (fetchAnalysis as Mock).mockResolvedValue(MOCK_ANALYSIS);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    (pollAnalysis as Mock).mockResolvedValue({
+      id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      status: 'complete',
+      createdAt: '2026-01-15T10:00:00Z',
+      result: MOCK_ANALYSIS,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('Loading state', () => {
     it('shows loading spinner while fetching', () => {
-      (fetchAnalysis as Mock).mockReturnValue(new Promise<never>(() => undefined));
+      (pollAnalysis as Mock).mockReturnValue(new Promise<never>(() => undefined));
       renderResultsPage();
 
       expect(screen.getByText('Loading analysis...')).toBeInTheDocument();
@@ -129,7 +139,35 @@ describe('ResultsPage', () => {
       renderResultsPage('my-analysis-id');
 
       await waitFor(() => {
-        expect(fetchAnalysis).toHaveBeenCalledWith('my-analysis-id');
+        expect(pollAnalysis).toHaveBeenCalledWith('my-analysis-id');
+      });
+    });
+  });
+
+  describe('Polling states', () => {
+    it('shows analyzing message when status is analyzing', async () => {
+      (pollAnalysis as Mock).mockResolvedValue({
+        id: 'test-id',
+        status: 'analyzing',
+        createdAt: '2026-01-15T10:00:00Z',
+      });
+      renderResultsPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Analyzing your yard...')).toBeInTheDocument();
+      });
+    });
+
+    it('shows matching message when status is matching', async () => {
+      (pollAnalysis as Mock).mockResolvedValue({
+        id: 'test-id',
+        status: 'matching',
+        createdAt: '2026-01-15T10:00:00Z',
+      });
+      renderResultsPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Finding perfect plants for your zone...')).toBeInTheDocument();
       });
     });
   });
@@ -291,6 +329,7 @@ describe('ResultsPage', () => {
 
   describe('Share button', () => {
     it('shows toast on click', async () => {
+      vi.useRealTimers();
       const user = userEvent.setup();
       renderResultsPage();
 
@@ -319,7 +358,7 @@ describe('ResultsPage', () => {
 
   describe('Expired / Not found state', () => {
     it('shows expired message on 404', async () => {
-      (fetchAnalysis as Mock).mockRejectedValue(new ApiError(404, 'Not found'));
+      (pollAnalysis as Mock).mockRejectedValue(new ApiError(404, 'Not found'));
       renderResultsPage();
 
       await waitFor(() => {
@@ -334,7 +373,7 @@ describe('ResultsPage', () => {
 
   describe('Error handling', () => {
     it('shows error message on network failure', async () => {
-      (fetchAnalysis as Mock).mockRejectedValue(new Error('Network error'));
+      (pollAnalysis as Mock).mockRejectedValue(new Error('Network error'));
       renderResultsPage();
 
       await waitFor(() => {
@@ -342,8 +381,22 @@ describe('ResultsPage', () => {
       });
     });
 
+    it('shows error when analysis failed', async () => {
+      (pollAnalysis as Mock).mockResolvedValue({
+        id: 'test-id',
+        status: 'failed',
+        createdAt: '2026-01-15T10:00:00Z',
+        error: 'Analysis timed out. Please try again.',
+      });
+      renderResultsPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Analysis timed out. Please try again.')).toBeInTheDocument();
+      });
+    });
+
     it('shows link to analyze page on error', async () => {
-      (fetchAnalysis as Mock).mockRejectedValue(new Error('fail'));
+      (pollAnalysis as Mock).mockRejectedValue(new Error('fail'));
       renderResultsPage();
 
       await waitFor(() => {

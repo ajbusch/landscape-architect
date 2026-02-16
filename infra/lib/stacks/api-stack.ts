@@ -28,12 +28,13 @@ export class ApiStack extends Stack {
     const bucket = s3.Bucket.fromBucketName(this, 'ImportedBucket', bucketName);
     const secret = secretsmanager.Secret.fromSecretCompleteArn(this, 'ImportedSecret', secretArn);
 
-    const fn = new nodejs.NodejsFunction(this, 'ApiFunction', {
-      entry: '../apps/api/src/lambda.ts',
-      handler: 'lambdaHandler',
+    // ── Worker Lambda (heavy processing: Sharp, Claude Vision, plant matching) ──
+    const workerFn = new nodejs.NodejsFunction(this, 'WorkerFunction', {
+      entry: '../apps/api/src/worker.ts',
+      handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
-      timeout: Duration.seconds(30),
+      timeout: Duration.seconds(120),
       memorySize: 1024,
       bundling: {
         format: nodejs.OutputFormat.CJS,
@@ -51,15 +52,40 @@ export class ApiStack extends Stack {
         TABLE_NAME: tableName,
         BUCKET_NAME: bucketName,
         SECRET_ARN: secretArn,
-        STAGE: props.stage,
         CLAUDE_MODEL: 'claude-sonnet-4-20250514',
         NODE_OPTIONS: '--enable-source-maps',
       },
     });
 
-    table.grantReadWriteData(fn);
-    bucket.grantReadWrite(fn);
-    secret.grantRead(fn);
+    bucket.grantRead(workerFn);
+    table.grantReadWriteData(workerFn);
+    secret.grantRead(workerFn);
+
+    // ── API Lambda (lightweight: validation, DynamoDB read/write, invoke worker) ──
+    const apiFn = new nodejs.NodejsFunction(this, 'ApiFunction', {
+      entry: '../apps/api/src/lambda.ts',
+      handler: 'lambdaHandler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      timeout: Duration.seconds(30),
+      memorySize: 512,
+      bundling: {
+        format: nodejs.OutputFormat.CJS,
+        target: 'node20',
+        externalModules: ['@aws-sdk/*', 'sharp'],
+      },
+      environment: {
+        TABLE_NAME: tableName,
+        BUCKET_NAME: bucketName,
+        STAGE: props.stage,
+        WORKER_FUNCTION_NAME: workerFn.functionName,
+        NODE_OPTIONS: '--enable-source-maps',
+      },
+    });
+
+    table.grantReadWriteData(apiFn);
+    bucket.grantReadWrite(apiFn);
+    workerFn.grantInvoke(apiFn);
 
     const httpApi = new apigateway.HttpApi(this, 'HttpApi', {
       apiName: `LandscapeArchitect-Api-${props.stage}`,
@@ -75,7 +101,7 @@ export class ApiStack extends Stack {
     httpApi.addRoutes({
       path: '/{proxy+}',
       methods: [apigateway.HttpMethod.ANY],
-      integration: new integrations.HttpLambdaIntegration('LambdaIntegration', fn),
+      integration: new integrations.HttpLambdaIntegration('LambdaIntegration', apiFn),
     });
 
     const apiUrl = httpApi.url ?? '';
