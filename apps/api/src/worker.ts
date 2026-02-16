@@ -28,13 +28,15 @@ async function updateStatus(
   extra?: Record<string, unknown>,
 ): Promise<void> {
   const now = new Date().toISOString();
-  let updateExpr = 'SET #status = :status, updatedAt = :now';
-  const exprNames: Record<string, string> = { '#status': 'status' };
+  let updateExpr = 'SET #status = :status, #updatedAt = :now';
+  const exprNames: Record<string, string> = { '#status': 'status', '#updatedAt': 'updatedAt' };
   const exprValues: Record<string, unknown> = { ':status': status, ':now': now };
 
   if (extra) {
     for (const [key, value] of Object.entries(extra)) {
-      updateExpr += `, ${key} = :${key}`;
+      const nameRef = `#${key}`;
+      updateExpr += `, ${nameRef} = :${key}`;
+      exprNames[nameRef] = key;
       exprValues[`:${key}`] = value;
     }
   }

@@ -98,12 +98,12 @@ describe('AnalysisResultSchema', () => {
     expect(AnalysisResultSchema.safeParse(validResult).success).toBe(true);
   });
 
-  it('requires at least 1 recommendation', () => {
+  it('allows empty recommendations (e.g. invalid yard photo)', () => {
     const result = AnalysisResultSchema.safeParse({
       ...validResult,
       recommendations: [],
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it('allows at most 10 recommendations', () => {
