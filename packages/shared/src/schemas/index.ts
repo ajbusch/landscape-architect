@@ -27,6 +27,10 @@ export {
   type AnalysisResult,
   type AnalysisResponse,
   type AiAnalysisOutput,
+  AnalysisStatusSchema,
+  type AnalysisStatus,
+  AnalysisPollingResponseSchema,
+  type AnalysisPollingResponse,
 } from './analysis.js';
 
 export {

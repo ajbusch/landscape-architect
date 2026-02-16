@@ -6,5 +6,7 @@ export type {
   PlantRecommendation,
   AnalysisResult,
   AnalysisResponse,
+  AnalysisStatus,
+  AnalysisPollingResponse,
 } from '../schemas/index.js';
 export type { Plant, PlantSearchParams, PlantSearchResponse } from '../schemas/index.js';

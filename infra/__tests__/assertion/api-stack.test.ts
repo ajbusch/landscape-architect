@@ -11,32 +11,63 @@ describe('ApiStack', () => {
   });
   const template = Template.fromStack(stack);
 
-  it('creates a Lambda function', () => {
-    template.resourceCountIs('AWS::Lambda::Function', 1);
+  it('creates two Lambda functions (API + Worker)', () => {
+    template.resourceCountIs('AWS::Lambda::Function', 2);
   });
 
-  it('configures 1024MB memory and 30s timeout', () => {
-    template.hasResourceProperties('AWS::Lambda::Function', {
-      MemorySize: 1024,
-      Timeout: 30,
+  describe('API Lambda', () => {
+    it('configures 512MB memory and 30s timeout', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        MemorySize: 512,
+        Timeout: 30,
+        Handler: 'index.lambdaHandler',
+      });
+    });
+
+    it('has WORKER_FUNCTION_NAME and STAGE env vars', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'index.lambdaHandler',
+        Environment: {
+          Variables: Match.objectLike({
+            STAGE: 'dev',
+          }),
+        },
+      });
     });
   });
 
-  it('uses Node.js 20 ARM64 runtime', () => {
+  describe('Worker Lambda', () => {
+    it('configures 1024MB memory and 120s timeout', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        MemorySize: 1024,
+        Timeout: 120,
+        Handler: 'index.handler',
+      });
+    });
+
+    it('has CLAUDE_MODEL env var', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'index.handler',
+        Environment: {
+          Variables: Match.objectLike({
+            CLAUDE_MODEL: 'claude-sonnet-4-20250514',
+          }),
+        },
+      });
+    });
+  });
+
+  it('uses Node.js 20 ARM64 runtime for both', () => {
+    // Both functions should use nodejs20.x and arm64
     template.hasResourceProperties('AWS::Lambda::Function', {
       Runtime: 'nodejs20.x',
       Architectures: ['arm64'],
+      Handler: 'index.lambdaHandler',
     });
-  });
-
-  it('sets required environment variables', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
-      Environment: {
-        Variables: Match.objectLike({
-          STAGE: 'dev',
-          CLAUDE_MODEL: 'claude-sonnet-4-20250514',
-        }),
-      },
+      Runtime: 'nodejs20.x',
+      Architectures: ['arm64'],
+      Handler: 'index.handler',
     });
   });
 

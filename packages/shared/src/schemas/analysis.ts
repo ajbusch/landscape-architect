@@ -178,3 +178,51 @@ export const AiAnalysisOutputSchema = z.object({
 });
 
 export type AiAnalysisOutput = z.infer<typeof AiAnalysisOutputSchema>;
+
+/**
+ * Analysis status for async processing flow.
+ */
+export const AnalysisStatusSchema = z.enum([
+  'pending',
+  'analyzing',
+  'matching',
+  'complete',
+  'failed',
+]);
+
+export type AnalysisStatus = z.infer<typeof AnalysisStatusSchema>;
+
+/**
+ * Response from GET /api/v1/analyses/:id — status-based polling response.
+ */
+export const AnalysisPollingResponseSchema = z.discriminatedUnion('status', [
+  z.object({
+    id: z.string(),
+    status: z.literal('pending'),
+    createdAt: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    status: z.literal('analyzing'),
+    createdAt: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    status: z.literal('matching'),
+    createdAt: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    status: z.literal('complete'),
+    createdAt: z.string(),
+    result: AnalysisResponseSchema,
+  }),
+  z.object({
+    id: z.string(),
+    status: z.literal('failed'),
+    createdAt: z.string(),
+    error: z.string(),
+  }),
+]);
+
+export type AnalysisPollingResponse = z.infer<typeof AnalysisPollingResponseSchema>;

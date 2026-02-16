@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
 import type { AnalysisResponse, PlantRecommendation } from '@landscape-architect/shared';
-import { fetchAnalysis, ApiError } from '@/services/api';
+import { pollAnalysis, ApiError } from '@/services/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -77,12 +77,32 @@ function groupByCategory(
   return groups;
 }
 
+const STATUS_MESSAGES: Record<string, string> = {
+  pending: 'Starting analysis...',
+  analyzing: 'Analyzing your yard...',
+  matching: 'Finding perfect plants for your zone...',
+};
+
 export function ResultsPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -91,20 +111,59 @@ export function ResultsPage(): React.JSX.Element {
     setError(null);
     setNotFound(false);
 
-    fetchAnalysis(id)
-      .then((data) => {
-        setAnalysis(data);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        setLoading(false);
-        if (err instanceof ApiError && err.status === 404) {
-          setNotFound(true);
-        } else {
-          setError('Failed to load analysis. Please try again.');
-        }
-      });
-  }, [id]);
+    const checkStatus = (): void => {
+      void pollAnalysis(id)
+        .then((data) => {
+          switch (data.status) {
+            case 'pending':
+            case 'analyzing':
+            case 'matching':
+              setLoading(false);
+              setStatusMessage(STATUS_MESSAGES[data.status] ?? 'Processing...');
+              // Start polling if not already
+              if (!pollRef.current) {
+                pollRef.current = setInterval(checkStatus, 2000);
+                timeoutRef.current = setTimeout(() => {
+                  stopPolling();
+                  setStatusMessage(null);
+                  setError('Analysis is taking longer than expected. Please try again.');
+                }, 120_000);
+              }
+              break;
+            case 'complete':
+              stopPolling();
+              setStatusMessage(null);
+              if (data.result) {
+                setAnalysis(data.result);
+              }
+              setLoading(false);
+              break;
+            case 'failed':
+              stopPolling();
+              setStatusMessage(null);
+              setLoading(false);
+              setError(data.error ?? 'Analysis failed. Please try again.');
+              break;
+          }
+        })
+        .catch((err: unknown) => {
+          stopPolling();
+          setLoading(false);
+          setStatusMessage(null);
+          if (err instanceof ApiError && err.status === 404) {
+            setNotFound(true);
+          } else {
+            setError('Failed to load analysis. Please try again.');
+          }
+        });
+    };
+
+    checkStatus();
+
+    return () => {
+      stopPolling();
+    };
+  }, [id, stopPolling]);
 
   const handleShare = (): void => {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- clipboard is undefined in some environments
@@ -112,12 +171,12 @@ export function ResultsPage(): React.JSX.Element {
     toast.success('Link copied to clipboard');
   };
 
-  if (loading) {
+  if (loading || statusMessage) {
     return (
       <main className="flex min-h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="size-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Loading analysis...</p>
+          <p className="text-muted-foreground">{statusMessage ?? 'Loading analysis...'}</p>
         </div>
       </main>
     );
