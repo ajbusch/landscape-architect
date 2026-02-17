@@ -133,10 +133,15 @@ export async function analyzeYardPhoto(
         };
       }
 
-      // Parse JSON
+      // Parse JSON — strip markdown code fences if Claude wrapped the response
       let parsed: unknown;
       try {
-        parsed = JSON.parse(textBlock.text);
+        let jsonText = textBlock.text.trim();
+        const fencedContent = /^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/.exec(jsonText)?.[1];
+        if (fencedContent !== undefined) {
+          jsonText = fencedContent.trim();
+        }
+        parsed = JSON.parse(jsonText);
       } catch {
         return {
           ok: false,

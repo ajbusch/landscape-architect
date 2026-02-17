@@ -195,6 +195,33 @@ describe('analyzeYardPhoto', () => {
     }
   });
 
+  it('strips markdown code fences from JSON response', async () => {
+    const fencedJson = '```json\n' + JSON.stringify(validAiResponse) + '\n```';
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: fencedJson }],
+    });
+
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.summary).toBe('A medium backyard with shade.');
+    }
+  });
+
+  it('strips code fences without json language tag', async () => {
+    const fencedJson = '```\n' + JSON.stringify(validAiResponse) + '\n```';
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: fencedJson }],
+    });
+
+    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+  });
+
   it('handles response with no text content', async () => {
     mockCreate.mockResolvedValueOnce({
       content: [{ type: 'tool_use', id: 'x', name: 'y', input: {} }],
