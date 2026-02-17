@@ -1,5 +1,8 @@
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { CfnOutput, Duration, Fn, Stack, type StackProps, Tags } from 'aws-cdk-lib';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
