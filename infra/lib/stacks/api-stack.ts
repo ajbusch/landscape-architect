@@ -123,7 +123,7 @@ export class ApiStack extends Stack {
       const datadogExtension = lambda.LayerVersion.fromLayerVersionArn(
         this,
         'DatadogExtension',
-        `arn:aws:lambda:${region}:464622532012:layer:Datadog-Extension:65`,
+        `arn:aws:lambda:${region}:464622532012:layer:Datadog-Extension-ARM:65`,
       );
 
       for (const fn of [apiFn, workerFn]) {
