@@ -106,6 +106,23 @@ describe('ApiStack', () => {
     });
   });
 
+  it('has CORS configured for dev origins', () => {
+    template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+      CorsConfiguration: Match.objectLike({
+        AllowOrigins: Match.arrayWith([
+          'https://dev.landscaper.cloud',
+          'https://staging.landscaper.cloud',
+          'https://d2jp0cpr1bn6fp.cloudfront.net',
+          'https://d3734vo7rulmf3.cloudfront.net',
+          'http://localhost:5173',
+          'http://localhost:3000',
+        ]),
+        AllowMethods: Match.arrayWith(['*']),
+        AllowHeaders: Match.arrayWith(['*']),
+      }),
+    });
+  });
+
   it('has a catch-all route', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
       RouteKey: 'ANY /{proxy+}',

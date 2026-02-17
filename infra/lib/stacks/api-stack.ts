@@ -138,12 +138,27 @@ export class ApiStack extends Stack {
       }
     }
 
+    const isProd = props.stage === 'prod';
+
+    const apiCorsOrigins = isProd
+      ? [
+          'https://landscapearchitect.app',
+          'https://landscaper.cloud',
+          'https://d5hj1rpwk1mpl.cloudfront.net',
+        ]
+      : [
+          'https://dev.landscaper.cloud',
+          'https://staging.landscaper.cloud',
+          'https://d2jp0cpr1bn6fp.cloudfront.net',
+          'https://d3734vo7rulmf3.cloudfront.net',
+          'http://localhost:5173',
+          'http://localhost:3000',
+        ];
+
     const httpApi = new apigateway.HttpApi(this, 'HttpApi', {
       apiName: `LandscapeArchitect-Api-${props.stage}`,
       corsPreflight: {
-        allowOrigins: [
-          props.stage === 'prod' ? 'https://landscapearchitect.app' : 'http://localhost:5173',
-        ],
+        allowOrigins: apiCorsOrigins,
         allowMethods: [apigateway.CorsHttpMethod.ANY],
         allowHeaders: ['*'],
       },
