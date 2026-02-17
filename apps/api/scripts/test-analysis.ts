@@ -84,7 +84,7 @@ async function main(): Promise<void> {
       id: string;
       status: string;
       error?: string;
-      result?: { summary: string; recommendations: unknown[] };
+      result?: { result: { summary: string; recommendations: unknown[] } };
     }>(`${BASE_URL}/api/v1/analyses/${id}`);
 
     if (analysis.status !== lastStatus) {
@@ -95,10 +95,10 @@ async function main(): Promise<void> {
     if (analysis.status === 'complete') {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       log(`Analysis complete in ${elapsed}s`);
-      if (analysis.result) {
-        log(`Summary: ${analysis.result.summary.slice(0, 120)}...`);
+      if (analysis.result?.result) {
+        log(`Summary: ${analysis.result.result.summary.slice(0, 120)}...`);
         log(
-          `Recommendations: ${Array.isArray(analysis.result.recommendations) ? analysis.result.recommendations.length : 0}`,
+          `Recommendations: ${Array.isArray(analysis.result.result.recommendations) ? analysis.result.result.recommendations.length : 0}`,
         );
       }
       process.exit(0);
