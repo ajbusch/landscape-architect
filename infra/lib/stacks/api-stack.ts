@@ -129,7 +129,7 @@ export class ApiStack extends Stack {
       for (const fn of [apiFn, workerFn]) {
         fn.addLayers(datadogExtension);
         fn.addEnvironment('DD_API_KEY_SECRET_ARN', props.ddApiKeySecret.secretArn);
-        fn.addEnvironment('DD_SITE', 'datadoghq.com');
+        fn.addEnvironment('DD_SITE', 'us5.datadoghq.com');
         fn.addEnvironment('DD_LOG_LEVEL', 'info');
         fn.addEnvironment('DD_SERVERLESS_LOGS_ENABLED', 'true');
         fn.addEnvironment('DD_ENV', props.stage);

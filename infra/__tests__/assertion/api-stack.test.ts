@@ -211,7 +211,7 @@ describe('ApiStack with Datadog Extension', () => {
         Handler: handler,
         Environment: {
           Variables: Match.objectLike({
-            DD_SITE: 'datadoghq.com',
+            DD_SITE: 'us5.datadoghq.com',
             DD_LOG_LEVEL: 'info',
             DD_SERVERLESS_LOGS_ENABLED: 'true',
             DD_ENV: 'dev',
