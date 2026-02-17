@@ -154,10 +154,10 @@ export const AiAnalysisOutputSchema = z.object({
     z.object({
       type: FeatureTypeSchema,
       label: z.string().min(1).max(100),
-      species: z.string().max(100).optional(),
+      species: z.string().max(100).nullish(),
       confidence: ConfidenceLevelSchema,
-      sunExposure: SunExposureSchema.optional(),
-      notes: z.string().max(500).optional(),
+      sunExposure: SunExposureSchema.nullish(),
+      notes: z.string().max(500).nullish(),
     }),
   ),
   recommendedPlantTypes: z.array(
@@ -169,12 +169,12 @@ export const AiAnalysisOutputSchema = z.object({
       searchCriteria: z.object({
         type: z.string().min(1).max(50),
         light: z.string().min(1).max(50),
-        tags: z.array(z.string().max(50)).max(10).optional(),
+        tags: z.array(z.string().max(50)).max(10).nullish(),
       }),
     }),
   ),
   isValidYardPhoto: z.boolean(),
-  invalidPhotoReason: z.string().max(500).optional(),
+  invalidPhotoReason: z.string().max(500).nullish(),
 });
 
 export type AiAnalysisOutput = z.infer<typeof AiAnalysisOutputSchema>;
