@@ -54,7 +54,7 @@ async function main(): Promise<void> {
   // ── 3. Upload image to S3 ────────────────────────────────────────
   const putRes = await fetch(uploadUrl, {
     method: 'PUT',
-    headers: { 'Content-Type': 'image/jpeg' },
+    headers: { 'Content-Type': 'image/jpeg', 'x-amz-server-side-encryption': 'AES256' },
     body: imageBuffer,
   });
   if (!putRes.ok) {
