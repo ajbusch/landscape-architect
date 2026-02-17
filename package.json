@@ -21,7 +21,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint:secrets": "secretlint \"**/*\"",
-    "test:smoke": "tsx apps/api/scripts/test-analysis.ts"
+    "test:smoke": "pnpm --filter @landscape-architect/api exec tsx scripts/test-analysis.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
