@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CfnOutput, Duration, Fn, Stack, type StackProps, Tags } from 'aws-cdk-lib';
+import { CfnOutput, Duration, Fn, RemovalPolicy, Stack, type StackProps, Tags } from 'aws-cdk-lib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
@@ -8,16 +8,20 @@ import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import type { Construct } from 'constructs';
 
 export interface ApiStackProps extends StackProps {
   stage: string;
+  ddApiKeySecret?: secretsmanager.ISecret;
 }
 
 export class ApiStack extends Stack {
   public readonly apiUrl: string;
+  public readonly apiLambda: lambda.Function;
+  public readonly workerLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
@@ -31,6 +35,19 @@ export class ApiStack extends Stack {
     const table = dynamodb.Table.fromTableName(this, 'ImportedTable', tableName);
     const bucket = s3.Bucket.fromBucketName(this, 'ImportedBucket', bucketName);
     const secret = secretsmanager.Secret.fromSecretCompleteArn(this, 'ImportedSecret', secretArn);
+
+    // ── Explicit log groups with retention ──────────────────────────
+    const apiLogGroup = new logs.LogGroup(this, 'ApiLogGroup', {
+      retention:
+        props.stage === 'prod' ? logs.RetentionDays.THREE_MONTHS : logs.RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
+    const workerLogGroup = new logs.LogGroup(this, 'WorkerLogGroup', {
+      retention:
+        props.stage === 'prod' ? logs.RetentionDays.THREE_MONTHS : logs.RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
 
     // ── Sharp Lambda Layer (pre-built native binaries for ARM64) ──
     // Run `bash infra/layers/sharp/build.sh` before cdk synth/deploy to populate nodejs/
@@ -50,6 +67,7 @@ export class ApiStack extends Stack {
       timeout: Duration.seconds(120),
       memorySize: 1024,
       layers: [sharpLayer],
+      logGroup: workerLogGroup,
       bundling: {
         format: nodejs.OutputFormat.CJS,
         target: 'node20',
@@ -60,6 +78,7 @@ export class ApiStack extends Stack {
         BUCKET_NAME: bucketName,
         SECRET_ARN: secretArn,
         CLAUDE_MODEL: 'claude-sonnet-4-20250514',
+        STAGE: props.stage,
         NODE_OPTIONS: '--enable-source-maps',
       },
     });
@@ -76,6 +95,7 @@ export class ApiStack extends Stack {
       architecture: lambda.Architecture.ARM_64,
       timeout: Duration.seconds(30),
       memorySize: 512,
+      logGroup: apiLogGroup,
       bundling: {
         format: nodejs.OutputFormat.CJS,
         target: 'node20',
@@ -93,6 +113,30 @@ export class ApiStack extends Stack {
     table.grantReadWriteData(apiFn);
     bucket.grantReadWrite(apiFn);
     workerFn.grantInvoke(apiFn);
+
+    this.apiLambda = apiFn;
+    this.workerLambda = workerFn;
+
+    // ── Datadog Extension (gated on API key secret) ──────────────────
+    if (props.ddApiKeySecret) {
+      const region = Stack.of(this).region;
+      const datadogExtension = lambda.LayerVersion.fromLayerVersionArn(
+        this,
+        'DatadogExtension',
+        `arn:aws:lambda:${region}:464622532012:layer:Datadog-Extension:65`,
+      );
+
+      for (const fn of [apiFn, workerFn]) {
+        fn.addLayers(datadogExtension);
+        fn.addEnvironment('DD_API_KEY_SECRET_ARN', props.ddApiKeySecret.secretArn);
+        fn.addEnvironment('DD_SITE', 'datadoghq.com');
+        fn.addEnvironment('DD_LOG_LEVEL', 'info');
+        fn.addEnvironment('DD_SERVERLESS_LOGS_ENABLED', 'true');
+        fn.addEnvironment('DD_ENV', props.stage);
+        fn.addEnvironment('DD_SERVICE', 'landscape-architect');
+        props.ddApiKeySecret.grantRead(fn);
+      }
+    }
 
     const httpApi = new apigateway.HttpApi(this, 'HttpApi', {
       apiName: `LandscapeArchitect-Api-${props.stage}`,

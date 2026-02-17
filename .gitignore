@@ -48,3 +48,6 @@ infra/layers/sharp/nodejs/
 # Playwright
 test-results/
 playwright-report/
+
+# Claude Code
+.claude/settings.json

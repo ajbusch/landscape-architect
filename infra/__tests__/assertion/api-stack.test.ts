@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest';
-import { App } from 'aws-cdk-lib';
+import { App, Stack } from 'aws-cdk-lib';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { ApiStack } from '../../lib/stacks/api-stack.js';
 
@@ -51,6 +52,17 @@ describe('ApiStack', () => {
         Environment: {
           Variables: Match.objectLike({
             CLAUDE_MODEL: 'claude-sonnet-4-20250514',
+          }),
+        },
+      });
+    });
+
+    it('has STAGE env var', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'index.handler',
+        Environment: {
+          Variables: Match.objectLike({
+            STAGE: 'dev',
           }),
         },
       });
@@ -129,5 +141,67 @@ describe('ApiStack', () => {
         Match.objectLike({ Key: 'Stage', Value: 'dev' }),
       ]),
     });
+  });
+
+  describe('Log groups', () => {
+    it('creates two log groups', () => {
+      template.resourceCountIs('AWS::Logs::LogGroup', 2);
+    });
+
+    it('sets 30-day retention for dev stage', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 30,
+      });
+    });
+  });
+});
+
+describe('ApiStack with Datadog Extension', () => {
+  const app = new App();
+
+  // Create a mock secret in a separate stack
+  const secretStack = new Stack(app, 'TestSecretStack', {
+    env: { account: '111111111111', region: 'us-east-1' },
+  });
+  const mockSecret = new secretsmanager.Secret(secretStack, 'MockDdSecret', {
+    secretName: 'test/datadog-api-key',
+  });
+
+  const stack = new ApiStack(app, 'TestApiWithDatadog', {
+    stage: 'dev',
+    env: { account: '111111111111', region: 'us-east-1' },
+    ddApiKeySecret: mockSecret,
+  });
+  const template = Template.fromStack(stack);
+
+  it('adds Datadog Extension layer to both Lambdas', () => {
+    // With Datadog, each Lambda should have 2 layers (Sharp for Worker, Datadog for both)
+    // API Lambda: 1 layer (Datadog)
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Handler: 'index.lambdaHandler',
+      Layers: Match.anyValue(),
+    });
+    // Worker Lambda: 2 layers (Sharp + Datadog)
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Handler: 'index.handler',
+      Layers: Match.anyValue(),
+    });
+  });
+
+  it('sets DD_* environment variables on both Lambdas', () => {
+    for (const handler of ['index.lambdaHandler', 'index.handler']) {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: handler,
+        Environment: {
+          Variables: Match.objectLike({
+            DD_SITE: 'datadoghq.com',
+            DD_LOG_LEVEL: 'info',
+            DD_SERVERLESS_LOGS_ENABLED: 'true',
+            DD_ENV: 'dev',
+            DD_SERVICE: 'landscape-architect',
+          }),
+        },
+      });
+    }
   });
 });

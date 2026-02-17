@@ -39,6 +39,7 @@ export function analysesRoute(app: FastifyInstance): void {
     const analysisId = randomUUID();
     const { uploadUrl, s3Key } = await getPhotoUploadUrl(analysisId, contentType, ext);
 
+    request.log.info({ analysisId }, 'Upload URL generated');
     return await reply.send({ uploadUrl, s3Key, analysisId });
   });
 
@@ -67,6 +68,7 @@ export function analysesRoute(app: FastifyInstance): void {
 
     // ── 2. Generate analysisId ────────────────────────────────────────
     const analysisId = randomUUID();
+    request.log.info({ analysisId, zipCode, zone: zoneData.zone }, 'Analysis requested');
 
     // ── 3. Write pending DynamoDB record ──────────────────────────────
     const now = new Date();
@@ -92,7 +94,7 @@ export function analysesRoute(app: FastifyInstance): void {
 
     // ── 4. Async invoke Worker Lambda ─────────────────────────────────
     try {
-      await lambdaClient.send(
+      const invokeResult = await lambdaClient.send(
         new InvokeCommand({
           FunctionName: WORKER_FUNCTION_NAME,
           InvocationType: 'Event',
@@ -106,6 +108,14 @@ export function analysesRoute(app: FastifyInstance): void {
             }),
           ),
         }),
+      );
+      request.log.info(
+        {
+          analysisId,
+          workerFunctionName: WORKER_FUNCTION_NAME,
+          workerRequestId: invokeResult.$metadata?.requestId,
+        },
+        'Worker invoked',
       );
     } catch (err) {
       request.log.error(err, 'Failed to invoke worker Lambda');
@@ -145,6 +155,8 @@ export function analysesRoute(app: FastifyInstance): void {
 
     const status = item.status ? String(item.status) : 'complete';
     const createdAt = String(item.createdAt);
+
+    request.log.info({ analysisId: id, status }, 'Analysis retrieved');
 
     // ── In-progress statuses ──────────────────────────────────────────
     if (status === 'pending' || status === 'analyzing' || status === 'matching') {
