@@ -23,6 +23,11 @@
     "lint:secrets": "secretlint \"**/*\"",
     "test:smoke": "pnpm --filter @landscape-architect/api exec tsx scripts/test-analysis.ts"
   },
+  "pnpm": {
+    "overrides": {
+      "fast-xml-parser": ">=5.3.6"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
     "@secretlint/secretlint-rule-preset-recommend": "^11.3.1",
