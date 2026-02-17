@@ -27,8 +27,8 @@ importers:
         specifier: ^10.1.8
         version: 10.1.8(eslint@10.0.0(jiti@2.6.1))
       eslint-plugin-security:
-        specifier: ^3.0.1
-        version: 3.0.1
+        specifier: github:eslint-community/eslint-plugin-security#7f9ee7767774
+        version: https://codeload.github.com/eslint-community/eslint-plugin-security/tar.gz/7f9ee7767774
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
@@ -3220,8 +3220,9 @@ packages:
     peerDependencies:
       eslint: '>=7.0.0'
 
-  eslint-plugin-security@3.0.1:
-    resolution: {integrity: sha512-XjVGBhtDZJfyuhIxnQ/WMm385RbX3DBu7H1J7HNNhmB2tnGxMeqVSnYv79oAj992ayvIBZghsymwkYFS6cGH4Q==}
+  eslint-plugin-security@https://codeload.github.com/eslint-community/eslint-plugin-security/tar.gz/7f9ee7767774:
+    resolution: {tarball: https://codeload.github.com/eslint-community/eslint-plugin-security/tar.gz/7f9ee7767774}
+    version: 3.0.1
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   eslint-scope@9.1.0:
@@ -8508,7 +8509,7 @@ snapshots:
     dependencies:
       eslint: 10.0.0(jiti@2.6.1)
 
-  eslint-plugin-security@3.0.1:
+  eslint-plugin-security@https://codeload.github.com/eslint-community/eslint-plugin-security/tar.gz/7f9ee7767774:
     dependencies:
       safe-regex: 2.1.1
 
