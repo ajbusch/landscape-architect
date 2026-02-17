@@ -3,6 +3,7 @@ import 'source-map-support/register.js';
 import { App } from 'aws-cdk-lib';
 import { ApiStack } from '../lib/stacks/api-stack.js';
 import { CloudTrailStack } from '../lib/stacks/cloudtrail-stack.js';
+import { ObservabilityStack } from '../lib/stacks/observability-stack.js';
 import { DatabaseStack } from '../lib/stacks/database-stack.js';
 import { DnsStack } from '../lib/stacks/dns-stack.js';
 import { FrontendStack } from '../lib/stacks/frontend-stack.js';
@@ -39,12 +40,20 @@ const storageStack = new StorageStack(app, `LandscapeArchitect-Storage-${stage}`
   env,
 });
 
+const observabilityStack = new ObservabilityStack(
+  app,
+  `LandscapeArchitect-Observability-${stage}`,
+  { stage, env },
+);
+
 const apiStack = new ApiStack(app, `LandscapeArchitect-Api-${stage}`, {
   stage,
   env,
+  ddApiKeySecret: observabilityStack.ddApiKeySecret,
 });
 apiStack.addDependency(databaseStack);
 apiStack.addDependency(storageStack);
+apiStack.addDependency(observabilityStack);
 
 const dnsShared = new DnsStack(app, 'LandscapeArchitect-Dns', {
   domainName: 'landscaper.cloud',

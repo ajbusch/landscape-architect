@@ -80,6 +80,9 @@ importers:
       fastify:
         specifier: ^5.2.0
         version: 5.7.4
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
     devDependencies:
       '@types/aws-lambda':
         specifier: ^8.10.160

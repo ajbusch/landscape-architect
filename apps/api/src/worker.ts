@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import type { Context } from 'aws-lambda';
 import type { IdentifiedFeature, AnalysisResponse } from '@landscape-architect/shared';
 import { docClient, TABLE_NAME } from './db.js';
 import {
@@ -11,6 +12,7 @@ import {
 } from './services/photo.js';
 import { analyzeYardPhoto } from './services/claude-vision.js';
 import { matchPlants } from './services/plant-matcher.js';
+import { logger } from './lib/logger.js';
 
 interface WorkerEvent {
   analysisId: string;
@@ -21,6 +23,8 @@ interface WorkerEvent {
 }
 
 const SEVEN_DAYS_S = 7 * 24 * 60 * 60;
+
+let isColdStart = true;
 
 async function updateStatus(
   analysisId: string,
@@ -52,27 +56,71 @@ async function updateStatus(
   );
 }
 
-export async function handler(event: WorkerEvent): Promise<void> {
+export async function handler(event: WorkerEvent, context: Context): Promise<void> {
   const { analysisId, photoKey, zipCode, zone, zoneDescription } = event;
+  const t0Total = Date.now();
+  let lastStep = 'start';
+
+  const log = logger.child({ analysisId, awsRequestId: context.awsRequestId });
+
+  log.info({ coldStart: isColdStart, step: 'start', photoKey, zone }, 'Worker started');
+  isColdStart = false;
 
   try {
     // ── 1. Update status to "analyzing" ─────────────────────────────
     await updateStatus(analysisId, 'analyzing');
+    lastStep = 'status_analyzing';
+    log.info({ step: 'status_analyzing' }, 'Status updated to analyzing');
 
     // ── 2. Download photo from S3 ───────────────────────────────────
     let photoBuffer: Buffer;
     try {
+      const t0 = Date.now();
       photoBuffer = await downloadPhoto(photoKey);
+      const duration = Date.now() - t0;
+      lastStep = 'download';
+      log.info(
+        { step: 'download', duration, photoSizeBytes: photoBuffer.length },
+        'Photo downloaded',
+      );
     } catch (err) {
-      console.error('Failed to download photo from S3', err);
-      await updateStatus(analysisId, 'failed', { error: 'Unable to retrieve photo' });
+      lastStep = 'download';
+      log.error(
+        {
+          step: 'download',
+          error: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+          errorCategory: 'download_failed',
+          errorRetryable: true,
+          userMessage: 'Unable to retrieve photo. Please try again.',
+          lastStep,
+          duration: Date.now() - t0Total,
+        },
+        'Worker failed',
+      );
+      await updateStatus(analysisId, 'failed', {
+        error: 'Unable to retrieve photo. Please try again.',
+      });
       return;
     }
 
     // ── 3. Validate and resize with Sharp ───────────────────────────
     const validation = validatePhoto(photoBuffer);
     if (!validation.valid) {
-      await updateStatus(analysisId, 'failed', { error: 'Unable to process image' });
+      log.error(
+        {
+          step: 'resize',
+          errorCategory: 'resize_failed',
+          errorRetryable: false,
+          userMessage: 'Unable to process this image format. Please try JPEG or PNG.',
+          lastStep,
+          duration: Date.now() - t0Total,
+        },
+        'Worker failed',
+      );
+      await updateStatus(analysisId, 'failed', {
+        error: 'Unable to process this image format. Please try JPEG or PNG.',
+      });
       return;
     }
 
@@ -81,47 +129,107 @@ export async function handler(event: WorkerEvent): Promise<void> {
 
     if (validation.type === 'heic') {
       try {
+        const t0 = Date.now();
         aiPhotoBuffer = await convertHeicToJpeg(photoBuffer);
         aiMediaType = 'image/jpeg';
+        const duration = Date.now() - t0;
+        log.info(
+          { step: 'resize', duration, resizedSizeBytes: aiPhotoBuffer.length },
+          'Photo resized',
+        );
       } catch (err) {
-        console.error('HEIC conversion failed', err);
-        await updateStatus(analysisId, 'failed', { error: 'Unable to process image' });
+        lastStep = 'resize';
+        log.error(
+          {
+            step: 'resize',
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            errorCategory: 'resize_failed',
+            errorRetryable: false,
+            userMessage: 'Unable to process this image format. Please try JPEG or PNG.',
+            lastStep,
+            duration: Date.now() - t0Total,
+          },
+          'Worker failed',
+        );
+        await updateStatus(analysisId, 'failed', {
+          error: 'Unable to process this image format. Please try JPEG or PNG.',
+        });
         return;
       }
     } else if (validation.type === 'png') {
       aiMediaType = 'image/png';
     }
 
-    aiPhotoBuffer = await resizeForApi(aiPhotoBuffer, aiMediaType);
+    {
+      const t0 = Date.now();
+      aiPhotoBuffer = await resizeForApi(aiPhotoBuffer, aiMediaType);
+      const duration = Date.now() - t0;
+      lastStep = 'resize';
+      log.info(
+        { step: 'resize', duration, resizedSizeBytes: aiPhotoBuffer.length },
+        'Photo resized',
+      );
+    }
 
     // ── 4. Base64 encode ────────────────────────────────────────────
     const base64Photo = aiPhotoBuffer.toString('base64');
 
     // ── 5. Call Claude Vision API ───────────────────────────────────
+    const t0Claude = Date.now();
     const aiResult = await analyzeYardPhoto(base64Photo, aiMediaType, zone, zoneDescription);
+    const claudeDuration = Date.now() - t0Claude;
+    lastStep = 'claude';
 
     if (!aiResult.ok) {
       const { error } = aiResult;
-      switch (error.type) {
-        case 'timeout':
-          await updateStatus(analysisId, 'failed', {
-            error: 'Analysis timed out. Please try again.',
-          });
-          return;
-        case 'rate_limit':
-          await updateStatus(analysisId, 'failed', {
-            error: 'Service is busy. Please try again.',
-          });
-          return;
-        default:
-          await updateStatus(analysisId, 'failed', {
-            error: 'AI analysis failed. Please try again.',
-          });
-          return;
-      }
+      const categoryMap: Record<string, string> = {
+        timeout: 'claude_timeout',
+        rate_limit: 'claude_rate_limit',
+        invalid_response: 'claude_invalid_response',
+        api_error: 'claude_api_error',
+      };
+      const errorCategory = categoryMap[error.type] ?? 'claude_api_error';
+
+      const userMessageMap: Record<string, string> = {
+        claude_timeout: 'Analysis timed out. Please try again.',
+        claude_rate_limit: 'Service is busy. Please try again in a moment.',
+        claude_invalid_response: 'AI analysis failed. Please try again.',
+        claude_api_error: 'AI analysis failed. Please try again.',
+      };
+      const userMessage = userMessageMap[errorCategory] ?? 'AI analysis failed. Please try again.';
+
+      log.error(
+        {
+          step: 'claude',
+          error: error.message,
+          errorCategory,
+          errorRetryable: true,
+          userMessage,
+          lastStep,
+          duration: Date.now() - t0Total,
+          claudeDuration,
+        },
+        'Worker failed',
+      );
+      await updateStatus(analysisId, 'failed', { error: userMessage });
+      return;
     }
 
-    // ── 6. Handle invalid yard photo ────────────────────────────────
+    log.info({ step: 'claude', duration: claudeDuration }, 'Claude responded');
+
+    // ── 6. Parse / validate result ──────────────────────────────────
+    lastStep = 'parse';
+    log.info(
+      {
+        step: 'parse',
+        isValid: true,
+        isValidYardPhoto: aiResult.data.isValidYardPhoto,
+      },
+      'AI response parsed',
+    );
+
+    // ── 7. Handle invalid yard photo ────────────────────────────────
     if (!aiResult.data.isValidYardPhoto) {
       const photoUrl = await getPhotoPresignedUrl(photoKey);
       const now = new Date();
@@ -150,25 +258,39 @@ export async function handler(event: WorkerEvent): Promise<void> {
         result: analysisResponse,
         isValidYardPhoto: false,
       });
+
+      log.info(
+        { step: 'complete', duration: Date.now() - t0Total, isValidYardPhoto: false },
+        'Worker complete',
+      );
       return;
     }
 
-    // ── 7. Update status to "matching" ──────────────────────────────
+    // ── 8. Update status to "matching" ──────────────────────────────
     await updateStatus(analysisId, 'matching');
+    lastStep = 'status_matching';
+    log.info({ step: 'status_matching' }, 'Status updated to matching');
 
-    // ── 8. Match plant types to real plants ─────────────────────────
+    // ── 9. Match plant types to real plants ──────────────────────────
+    const t0Match = Date.now();
     const recommendations = await matchPlants(aiResult.data, zone);
+    const matchDuration = Date.now() - t0Match;
+    lastStep = 'matching';
+    log.info(
+      { step: 'matching', duration: matchDuration, matchCount: recommendations.length },
+      'Plants matched',
+    );
 
-    // ── 9. Assemble features with IDs ───────────────────────────────
+    // ── 10. Assemble features with IDs ──────────────────────────────
     const features: IdentifiedFeature[] = aiResult.data.features.map((f) => ({
       ...f,
       id: randomUUID(),
     }));
 
-    // ── 10. Generate pre-signed URL ─────────────────────────────────
+    // ── 11. Generate pre-signed URL ─────────────────────────────────
     const photoUrl = await getPhotoPresignedUrl(photoKey);
 
-    // ── 11. Assemble response ───────────────────────────────────────
+    // ── 12. Assemble response ───────────────────────────────────────
     const now = new Date();
     const expiresAt = new Date(now.getTime() + SEVEN_DAYS_S * 1000);
 
@@ -189,16 +311,42 @@ export async function handler(event: WorkerEvent): Promise<void> {
       expiresAt: expiresAt.toISOString(),
     };
 
-    // ── 12. Save complete result ────────────────────────────────────
+    // ── 13. Save complete result ────────────────────────────────────
     await updateStatus(analysisId, 'complete', { result: analysisResponse });
+    lastStep = 'save_result';
+    log.info({ step: 'save_result' }, 'Result saved');
+
+    log.info({ step: 'complete', duration: Date.now() - t0Total }, 'Worker complete');
   } catch (err) {
-    console.error('Worker unhandled error', err);
+    log.error(
+      {
+        step: 'error',
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        lastStep,
+        duration: Date.now() - t0Total,
+        errorCategory: 'unknown',
+        errorRetryable: true,
+        userMessage: 'AI analysis failed. Please try again.',
+      },
+      'Worker failed',
+    );
     try {
       await updateStatus(analysisId, 'failed', {
         error: err instanceof Error ? err.message : 'An unexpected error occurred',
       });
     } catch (updateErr) {
-      console.error('Failed to update status to failed', updateErr);
+      log.error(
+        {
+          step: 'error',
+          error: updateErr instanceof Error ? updateErr.message : String(updateErr),
+          stack: updateErr instanceof Error ? updateErr.stack : undefined,
+          errorCategory: 'save_failed',
+          errorRetryable: true,
+          userMessage: 'AI analysis failed. Please try again.',
+        },
+        'Failed to update status to failed',
+      );
     }
   }
 }

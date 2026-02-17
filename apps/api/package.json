@@ -29,13 +29,14 @@
     "@fastify/cors": "^11.0.0",
     "@fastify/multipart": "^9.4.0",
     "@landscape-architect/shared": "workspace:*",
-    "fastify": "^5.2.0"
+    "fastify": "^5.2.0",
+    "pino": "^10.3.1"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.160",
     "@types/sharp": "^0.32.0",
-    "sharp": "^0.34.5",
     "@vitest/coverage-v8": "^4.0.18",
+    "sharp": "^0.34.5",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"

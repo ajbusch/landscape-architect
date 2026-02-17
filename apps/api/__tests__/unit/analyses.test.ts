@@ -21,7 +21,9 @@ vi.mock('../../src/services/photo.js', () => ({
 }));
 
 vi.mock('@aws-sdk/client-lambda', () => {
-  const mockSend = vi.fn().mockResolvedValue({});
+  const mockSend = vi.fn().mockResolvedValue({
+    $metadata: { requestId: 'mock-request-id' },
+  });
   return {
     LambdaClient: class {
       send = mockSend;
