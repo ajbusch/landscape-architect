@@ -7,6 +7,8 @@ import {
 } from '@landscape-architect/shared';
 import { docClient, TABLE_NAME } from '../db.js';
 
+const MAX_RECOMMENDATIONS = 10;
+
 function parseZone(zone: string): number {
   const match = /^(\d+)([ab])$/.exec(zone);
   if (!match) throw new Error(`Invalid zone: ${zone}`);
@@ -159,5 +161,6 @@ export async function matchPlants(
     }
   }
 
-  return recommendations;
+  // Cap at 10 to match AnalysisResultSchema.recommendations.max(10)
+  return recommendations.slice(0, MAX_RECOMMENDATIONS);
 }

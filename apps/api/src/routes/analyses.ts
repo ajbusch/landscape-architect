@@ -186,6 +186,11 @@ export function analysesRoute(app: FastifyInstance): void {
         }
       }
 
+      // Truncate recommendations to match schema max (handles records stored before the cap)
+      if (storedResult.result.recommendations.length > 10) {
+        storedResult.result.recommendations = storedResult.result.recommendations.slice(0, 10);
+      }
+
       const validated = AnalysisResponseSchema.safeParse(storedResult);
       if (validated.success) {
         return await reply.send({ id, status, createdAt, result: validated.data });
