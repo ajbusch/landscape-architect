@@ -162,6 +162,7 @@ export function AnalyzePage(): React.JSX.Element {
             zone={zone}
             onZoneResolved={setZone}
             disabled={isProcessing}
+            onSubmit={() => void handleSubmit()}
           />
 
           {error && (

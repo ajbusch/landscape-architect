@@ -11,6 +11,7 @@ interface ZipCodeInputProps {
   zone: string | null;
   onZoneResolved: (zone: string | null) => void;
   disabled?: boolean;
+  onSubmit?: () => void;
 }
 
 export function ZipCodeInput({
@@ -19,6 +20,7 @@ export function ZipCodeInput({
   zone,
   onZoneResolved,
   disabled,
+  onSubmit,
 }: ZipCodeInputProps): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -81,6 +83,12 @@ export function ZipCodeInput({
           placeholder="e.g. 28202"
           value={value}
           onChange={handleChange}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onSubmit?.();
+            }
+          }}
           disabled={disabled}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'zip-error' : zone ? 'zip-zone' : undefined}

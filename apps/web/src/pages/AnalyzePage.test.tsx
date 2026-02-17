@@ -250,6 +250,51 @@ describe('AnalyzePage', () => {
       );
     });
 
+    it('submits analysis when Enter is pressed in ZIP code field', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      renderAnalyzePage();
+
+      uploadFile(createTestFile());
+      await user.type(screen.getByLabelText('ZIP Code'), '28202');
+      await waitFor(() => {
+        expect(screen.getByText('Zone 7b')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByLabelText('ZIP Code'), '{Enter}');
+
+      await waitFor(() => {
+        expect(submitAnalysis).toHaveBeenCalledWith(expect.any(File), '28202');
+      });
+
+      await waitFor(
+        () => {
+          expect(mockNavigate).toHaveBeenCalledWith('/analyze/analysis-123');
+        },
+        { timeout: 5000 },
+      );
+    });
+
+    it('does not submit on Enter when form is incomplete', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      renderAnalyzePage();
+
+      // Only ZIP code, no photo
+      await user.type(screen.getByLabelText('ZIP Code'), '28202');
+      await waitFor(() => {
+        expect(screen.getByText('Zone 7b')).toBeInTheDocument();
+      });
+
+      // Clear any calls that may have leaked from prior async tests
+      (submitAnalysis as Mock).mockClear();
+
+      await user.type(screen.getByLabelText('ZIP Code'), '{Enter}');
+
+      // handleSubmit guards on !photo, so submitAnalysis should not be called
+      expect(submitAnalysis).not.toHaveBeenCalled();
+    });
+
     it('shows status messages during polling', async () => {
       (pollAnalysis as Mock).mockResolvedValue({
         id: 'analysis-123',
