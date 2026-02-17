@@ -113,7 +113,7 @@ export function analysesRoute(app: FastifyInstance): void {
         {
           analysisId,
           workerFunctionName: WORKER_FUNCTION_NAME,
-          workerRequestId: invokeResult.$metadata?.requestId,
+          workerRequestId: invokeResult.$metadata.requestId,
         },
         'Worker invoked',
       );
