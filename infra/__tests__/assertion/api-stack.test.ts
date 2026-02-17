@@ -55,6 +55,22 @@ describe('ApiStack', () => {
         },
       });
     });
+
+    it('has Sharp layer attached', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'index.handler',
+        MemorySize: 1024,
+        Layers: Match.anyValue(),
+      });
+    });
+  });
+
+  it('creates a Sharp Lambda Layer', () => {
+    template.resourceCountIs('AWS::Lambda::LayerVersion', 1);
+    template.hasResourceProperties('AWS::Lambda::LayerVersion', {
+      CompatibleRuntimes: ['nodejs20.x'],
+      Description: 'Sharp image processing library',
+    });
   });
 
   it('uses Node.js 20 ARM64 runtime for both', () => {

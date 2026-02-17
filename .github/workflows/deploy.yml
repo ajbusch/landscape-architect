@@ -87,6 +87,9 @@ jobs:
       - name: Build web app
         run: pnpm --filter @landscape-architect/web build
 
+      - name: Build Sharp layer
+        run: bash infra/layers/sharp/build.sh
+
       - name: CDK deploy
         run: cd infra && npx cdk deploy --all --require-approval never -c stage=dev
 
@@ -111,6 +114,9 @@ jobs:
 
       - name: Build web app
         run: pnpm --filter @landscape-architect/web build
+
+      - name: Build Sharp layer
+        run: bash infra/layers/sharp/build.sh
 
       - name: CDK deploy
         run: cd infra && npx cdk deploy --all --require-approval never -c stage=staging
@@ -144,6 +150,9 @@ jobs:
 
       - name: Build web app
         run: pnpm --filter @landscape-architect/web build
+
+      - name: Build Sharp layer
+        run: bash infra/layers/sharp/build.sh
 
       - name: CDK deploy
         run: cd infra && npx cdk deploy --all --require-approval never -c stage=prod

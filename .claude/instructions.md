@@ -53,6 +53,16 @@ Use conventional commits: `type(scope): description`
 - Test both success and error paths
 - Validate API responses against Zod schemas in tests
 
+## Deploying
+
+Before running `cdk synth` or `cdk deploy`, build the Sharp Lambda Layer:
+
+```sh
+bash infra/layers/sharp/build.sh
+```
+
+This populates `infra/layers/sharp/nodejs/` with the ARM64 sharp binaries needed by the Worker Lambda. The layer only needs rebuilding when the sharp version changes.
+
 ## Debugging Deployed Services
 
 When fixing Lambda or API issues:

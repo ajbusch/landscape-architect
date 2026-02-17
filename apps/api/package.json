@@ -29,12 +29,12 @@
     "@fastify/cors": "^11.0.0",
     "@fastify/multipart": "^9.4.0",
     "@landscape-architect/shared": "workspace:*",
-    "fastify": "^5.2.0",
-    "sharp": "^0.34.5"
+    "fastify": "^5.2.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.160",
     "@types/sharp": "^0.32.0",
+    "sharp": "^0.34.5",
     "@vitest/coverage-v8": "^4.0.18",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import { CfnOutput, Duration, Fn, Stack, type StackProps, Tags } from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -28,6 +29,15 @@ export class ApiStack extends Stack {
     const bucket = s3.Bucket.fromBucketName(this, 'ImportedBucket', bucketName);
     const secret = secretsmanager.Secret.fromSecretCompleteArn(this, 'ImportedSecret', secretArn);
 
+    // ── Sharp Lambda Layer (pre-built native binaries for ARM64) ──
+    // Run `bash infra/layers/sharp/build.sh` before cdk synth/deploy to populate nodejs/
+    const sharpLayer = new lambda.LayerVersion(this, 'SharpLayer', {
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../layers/sharp')),
+      compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
+      compatibleArchitectures: [lambda.Architecture.ARM_64],
+      description: 'Sharp image processing library',
+    });
+
     // ── Worker Lambda (heavy processing: Sharp, Claude Vision, plant matching) ──
     const workerFn = new nodejs.NodejsFunction(this, 'WorkerFunction', {
       entry: '../apps/api/src/worker.ts',
@@ -36,17 +46,11 @@ export class ApiStack extends Stack {
       architecture: lambda.Architecture.ARM_64,
       timeout: Duration.seconds(120),
       memorySize: 1024,
+      layers: [sharpLayer],
       bundling: {
         format: nodejs.OutputFormat.CJS,
         target: 'node20',
         externalModules: ['@aws-sdk/*', 'sharp'],
-        commandHooks: {
-          beforeBundling: () => [],
-          beforeInstall: () => [],
-          afterBundling: (_inputDir: string, outputDir: string) => [
-            `cd "${outputDir}" && npm init -y --silent 2>/dev/null && npm install --no-save --force sharp @img/sharp-linux-arm64 @img/sharp-libvips-linux-arm64`,
-          ],
-        },
       },
       environment: {
         TABLE_NAME: tableName,
