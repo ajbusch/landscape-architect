@@ -42,6 +42,9 @@ Thumbs.db
 cdk.out/
 cdk.context.json
 
+# Lambda layers (generated build artifacts)
+infra/layers/sharp/nodejs/
+
 # Playwright
 test-results/
 playwright-report/

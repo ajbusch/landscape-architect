@@ -80,9 +80,6 @@ importers:
       fastify:
         specifier: ^5.2.0
         version: 5.7.4
-      sharp:
-        specifier: ^0.34.5
-        version: 0.34.5
     devDependencies:
       '@types/aws-lambda':
         specifier: ^8.10.160
@@ -93,6 +90,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.0.18
         version: 4.0.18(vitest@4.0.18(@types/node@25.2.3)(jiti@2.6.1)(jsdom@28.0.0(@noble/hashes@1.8.0))(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.2.3)(typescript@5.9.3))(tsx@4.21.0))
+      sharp:
+        specifier: ^0.34.5
+        version: 0.34.5
       tsx:
         specifier: ^4.19.0
         version: 4.21.0
