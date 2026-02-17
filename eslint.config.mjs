@@ -30,6 +30,15 @@ export default tseslint.config(
       '@typescript-eslint/prefer-nullish-coalescing': 'warn',
       // Consistent type imports
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      // Too noisy in TypeScript — flags every Record/Map bracket access as unsafe
+      'security/detect-object-injection': 'off',
+    },
+  },
+  {
+    // Shadcn UI components — generated code with forwardRef wrappers
+    files: ['**/components/ui/**'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
     },
   },
   {

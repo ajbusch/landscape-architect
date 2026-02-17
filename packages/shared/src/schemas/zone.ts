@@ -5,6 +5,7 @@ import { z } from 'zod';
  */
 export const ZipCodeSchema = z
   .string()
+  // eslint-disable-next-line security/detect-unsafe-regex -- fixed-length quantifiers, no ReDoS risk
   .regex(/^\d{5}(-\d{4})?$/, 'Must be a valid US ZIP code (e.g., 28202 or 28202-1234)');
 
 /**

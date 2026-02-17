@@ -14,7 +14,7 @@ pnpm monorepo managed by Turborepo.
 Before committing, run these checks to match CI:
 
 ```sh
-pnpm lint --force   # --force bypasses Turborepo cache
+turbo lint --force   # --force bypasses Turborepo cache
 pnpm typecheck
 pnpm format:check   # fix with: pnpm format
 pnpm test:unit
