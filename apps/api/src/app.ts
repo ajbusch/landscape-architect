@@ -13,9 +13,7 @@ export interface AppOptions {
 export async function createApp(options: AppOptions = {}): Promise<FastifyInstance> {
   const useLogger = options.logger ?? true;
   const app = Fastify({
-    ...(useLogger
-      ? { loggerInstance: logger as unknown as FastifyBaseLogger }
-      : { logger: false }),
+    ...(useLogger ? { loggerInstance: logger as unknown as FastifyBaseLogger } : { logger: false }),
     bodyLimit: 10 * 1024 * 1024, // 10MB — matches API Gateway HTTP API hard limit
   });
 
