@@ -290,6 +290,30 @@ describe('AiAnalysisOutputSchema', () => {
     }
   });
 
+  it('accepts null for optional fields (species, notes, invalidPhotoReason)', () => {
+    const data = {
+      ...validAiOutput,
+      invalidPhotoReason: null,
+      features: [
+        {
+          type: 'tree',
+          label: 'Oak Tree',
+          species: null,
+          confidence: 'high',
+          sunExposure: null,
+          notes: null,
+        },
+      ],
+      recommendedPlantTypes: [
+        {
+          ...validAiOutput.recommendedPlantTypes[0],
+          searchCriteria: { type: 'perennial', light: 'partial_shade', tags: null },
+        },
+      ],
+    };
+    expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(true);
+  });
+
   it('allows optional tags in searchCriteria', () => {
     const data = {
       ...validAiOutput,

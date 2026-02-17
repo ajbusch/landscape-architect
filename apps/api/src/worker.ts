@@ -285,6 +285,9 @@ export async function handler(event: WorkerEvent, context: Context): Promise<voi
     const features: IdentifiedFeature[] = aiResult.data.features.map((f) => ({
       ...f,
       id: randomUUID(),
+      species: f.species ?? undefined,
+      sunExposure: f.sunExposure ?? undefined,
+      notes: f.notes ?? undefined,
     }));
 
     // ── 11. Generate pre-signed URL ─────────────────────────────────
