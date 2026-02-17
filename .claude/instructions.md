@@ -63,6 +63,12 @@ bash infra/layers/sharp/build.sh
 
 This populates `infra/layers/sharp/nodejs/` with the ARM64 sharp binaries needed by the Worker Lambda. The layer only needs rebuilding when the sharp version changes.
 
+## Datadog MCP
+
+If DD_API_KEY and DD_APP_KEY are set in .env, the Datadog MCP server is available.
+Query logs: get_logs with query `service:landscape-architect @analysisId:<id>`
+Setup: populate DD_API_KEY and DD_APP_KEY in .env, then restart Claude Code.
+
 ## Debugging Deployed Services
 
 When fixing Lambda or API issues:
