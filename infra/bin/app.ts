@@ -48,6 +48,7 @@ const observabilityStack = new ObservabilityStack(
 
 const apiStack = new ApiStack(app, `LandscapeArchitect-Api-${stage}`, {
   stage,
+  version: process.env.VERSION ?? 'local',
   env,
   ddApiKeySecret: observabilityStack.ddApiKeySecret,
 });

@@ -173,7 +173,7 @@ describe('ApiStack', () => {
   });
 });
 
-describe('ApiStack with Datadog Extension', () => {
+describe('ApiStack with Datadog Extension + Tracing', () => {
   const app = new App();
 
   // Create a mock secret in a separate stack
@@ -186,29 +186,71 @@ describe('ApiStack with Datadog Extension', () => {
 
   const stack = new ApiStack(app, 'TestApiWithDatadog', {
     stage: 'dev',
+    version: 'abc1234',
     env: { account: '111111111111', region: 'us-east-1' },
     ddApiKeySecret: mockSecret,
   });
   const template = Template.fromStack(stack);
 
-  it('adds Datadog Extension layer to both Lambdas', () => {
-    // With Datadog, each Lambda should have 2 layers (Sharp for Worker, Datadog for both)
-    // API Lambda: 1 layer (Datadog)
+  // After handler redirect, both Lambdas have the Datadog wrapper handler.
+  // Identify them by MemorySize: API = 512, Worker = 1024.
+  const DD_HANDLER = '/opt/nodejs/node_modules/datadog-lambda-js/handler.handler';
+
+  it('redirects both handlers to the Datadog wrapper', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
-      Handler: 'index.lambdaHandler',
-      Layers: Match.anyValue(),
+      MemorySize: 512,
+      Handler: DD_HANDLER,
     });
-    // Worker Lambda: 2 layers (Sharp + Datadog)
     template.hasResourceProperties('AWS::Lambda::Function', {
-      Handler: 'index.handler',
-      Layers: Match.anyValue(),
+      MemorySize: 1024,
+      Handler: DD_HANDLER,
+    });
+  });
+
+  it('sets DD_LAMBDA_HANDLER to original handler values', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      MemorySize: 512,
+      Environment: {
+        Variables: Match.objectLike({
+          DD_LAMBDA_HANDLER: 'index.lambdaHandler',
+        }),
+      },
+    });
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      MemorySize: 1024,
+      Environment: {
+        Variables: Match.objectLike({
+          DD_LAMBDA_HANDLER: 'index.handler',
+        }),
+      },
+    });
+  });
+
+  it('adds 2 Datadog layers to API Lambda (Extension + Node.js library)', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      MemorySize: 512,
+      Layers: Match.arrayWith([
+        Match.stringLikeRegexp('Datadog-Extension-ARM'),
+        Match.stringLikeRegexp('Datadog-Node20-x'),
+      ]),
+    });
+  });
+
+  it('adds 3 layers to Worker Lambda (Sharp + Extension + Node.js library)', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      MemorySize: 1024,
+      Layers: Match.arrayWith([
+        Match.stringLikeRegexp('Datadog-Extension-ARM'),
+        Match.stringLikeRegexp('Datadog-Node20-x'),
+      ]),
     });
   });
 
   it('sets DD_* environment variables on both Lambdas', () => {
-    for (const handler of ['index.lambdaHandler', 'index.handler']) {
+    for (const memorySize of [512, 1024]) {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Handler: handler,
+        MemorySize: memorySize,
+        Handler: DD_HANDLER,
         Environment: {
           Variables: Match.objectLike({
             DD_SITE: 'us5.datadoghq.com',
@@ -216,6 +258,11 @@ describe('ApiStack with Datadog Extension', () => {
             DD_SERVERLESS_LOGS_ENABLED: 'true',
             DD_ENV: 'dev',
             DD_SERVICE: 'landscape-architect',
+            DD_TRACE_ENABLED: 'true',
+            DD_MERGE_XRAY_TRACES: 'false',
+            DD_COLD_START_TRACING: 'true',
+            DD_CAPTURE_LAMBDA_PAYLOAD: 'false',
+            DD_VERSION: 'abc1234',
           }),
         },
       });
