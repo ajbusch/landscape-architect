@@ -2,11 +2,9 @@
 
 ## Status
 
-Ready for implementation (Phase 1)
+Phase 1 deployed. Phase 3 ready for implementation.
 
 ## Context
-
-The Worker Lambda is failing in dev with a generic "AI analysis failed" error. We have no visibility into what's happening — CloudWatch logs require manual tailing, there's no structured logging, and no centralized log aggregation. We need observability to diagnose the current failure and to support ongoing development.
 
 This spec defines a phased approach using Datadog, starting with structured logging and log shipping (Phase 1), expanding to metrics, tracing, and alerting in later phases.
 
@@ -17,27 +15,40 @@ Related: AI Analysis Integration v2 (Async) spec, ADR-004 (DynamoDB)
 ## Architecture Overview
 
 ```
-Lambda (API + Worker)
+Lambda (API + Worker) — ARM64 architecture
   │
   ├─ Pino JSON logs ──► CloudWatch Logs
   │                          │
-  │                    Datadog Extension (Lambda Layer)
+  │                    Datadog Extension (Lambda Layer, ARM variant)
   │                          │
   │                          ▼
-  │                     Datadog Logs ◄── Claude Code (via MCP)
+  │                     Datadog Logs (us5.datadoghq.com) ◄── Claude Code (via MCP)
   │
-  └─ (Phase 3) Datadog Extension ──► Datadog APM
+  ├─ Datadog Node.js Library Layer (datadog-lambda-js + dd-trace, multi-arch)
+  │     │
+  │     ├─ Auto-instruments AWS SDK, HTTP, Pino
+  │     └─ Handler redirect (DD_LAMBDA_HANDLER)
+  │                          │
+  │                    Datadog Extension (same layer as above)
+  │                          │
+  │                          ▼
+  │                     Datadog APM (us5.datadoghq.com)
+  │
+  └─ Cross-Lambda correlation via analysisId facet
 ```
 
 **Key decisions:**
 
 - **Pino** for structured logging (already a Fastify dependency — zero new deps)
-- **Datadog Lambda Extension** for log shipping (not the legacy Forwarder — Extension handles logs, metrics, and traces in one layer, avoiding a second mechanism in Phase 2)
+- **Datadog Lambda Extension** (ARM variant) for log/metric/trace shipping (not the legacy Forwarder)
+- **Datadog Node.js Library Layer** (multi-arch) for tracing (provides pre-built `datadog-lambda-js` + `dd-trace` — NOT installed as npm deps due to esbuild incompatibility)
+- **Handler redirect** for trace instrumentation (no application code changes)
 - **Explicit CloudWatch log groups** in CDK with retention policies
+- **Both Lambdas are ARM64** — the Extension layer ARN must use the `-ARM` suffix (Go binary). The Node.js library layer is published as multi-arch (single ARN for x86 and ARM64)
 
 ---
 
-## Phase 1: Structured Logging + Datadog (Now)
+## Phase 1: Structured Logging + Datadog (Deployed)
 
 ### 1.1 Structured Logger (Pino)
 
@@ -281,6 +292,8 @@ Ship logs from both Lambdas to Datadog using the Datadog Lambda Extension (a Lam
 
 **Architecture note:** The Extension layer and environment variables are added to the Lambdas in the **ApiStack**, not in a separate ObservabilityStack. Mutating Lambda resources cross-stack (calling `addLayers()` / `addEnvironment()` on a Lambda owned by another stack) is a CDK anti-pattern that creates implicit circular dependencies and fragile deployment ordering. The ObservabilityStack owns only the Secrets Manager secret and exports its ARN for the ApiStack to consume.
 
+**ARM64 note:** Both Lambdas use `Architecture.ARM_64`. The Datadog Extension layer ARN must use the `-ARM` suffix (it contains a Go binary). The Node.js library layer is published as multi-arch and does not require a suffix. Using an x86 Extension layer on ARM Lambdas will fail at invocation time.
+
 #### ObservabilityStack (new): `infra/lib/stacks/observability-stack.ts`
 
 Owns the Datadog API key secret and exports its ARN.
@@ -331,17 +344,18 @@ interface ApiStackProps extends cdk.StackProps {
 if (props.ddApiKeySecret) {
   // Pin to specific version, never use :latest
   // Layer ARN is region-specific; parameterize for multi-region support
+  // Both Lambdas are ARM64 — must use -ARM suffix variant
   const region = cdk.Stack.of(this).region;
   const datadogExtension = lambda.LayerVersion.fromLayerVersionArn(
     this,
     'DatadogExtension',
-    `arn:aws:lambda:${region}:464622532012:layer:Datadog-Extension:65`,
+    `arn:aws:lambda:${region}:464622532012:layer:Datadog-Extension-ARM:65`,
   );
 
   for (const fn of [apiLambda, workerLambda]) {
     fn.addLayers(datadogExtension);
     fn.addEnvironment('DD_API_KEY_SECRET_ARN', props.ddApiKeySecret.secretArn);
-    fn.addEnvironment('DD_SITE', 'datadoghq.com');
+    fn.addEnvironment('DD_SITE', 'us5.datadoghq.com');
     fn.addEnvironment('DD_LOG_LEVEL', 'info');
     fn.addEnvironment('DD_SERVERLESS_LOGS_ENABLED', 'true');
     fn.addEnvironment('DD_ENV', props.stage);
@@ -390,7 +404,7 @@ aws secretsmanager put-secret-value \
 
 ### 1.7 Datadog Log Pipeline Configuration
 
-After logs are flowing, configure in the Datadog UI:
+After logs are flowing, configure in the Datadog UI (at us5.datadoghq.com):
 
 - **Log Pipeline** for `service:landscape-architect` (Datadog auto-detects Pino JSON)
 - **Status Remapper** on the `level` attribute (maps Pino's string levels — `info`, `warn`, `error` — to Datadog's standard `status` field). This works automatically because the logger uses the `formatters.level` override (see section 1.1) to output string levels.
@@ -415,7 +429,7 @@ Enable the open-source Datadog MCP server so Claude Code can query logs directly
       "env": {
         "DATADOG_API_KEY": "${DD_API_KEY}",
         "DATADOG_APP_KEY": "${DD_APP_KEY}",
-        "DATADOG_SITE": "datadoghq.com"
+        "DATADOG_SITE": "us5.datadoghq.com"
       }
     }
   }
@@ -446,9 +460,11 @@ claude mcp add datadog -- ~/.local/bin/datadog_mcp_cli \
 
 ---
 
-## Phase 2: Metrics & Dashboards (Week 2-3)
+## Phase 2: Metrics & Dashboards (After Phase 3)
 
 **Goal:** Understand performance characteristics and usage patterns.
+
+**Why after Phase 3:** Tracing provides more immediate debugging value than log-based metrics. Metrics are derived from Phase 1 logs (no code changes), so they can be added at any time.
 
 ### Custom Metrics
 
@@ -486,57 +502,259 @@ Create a "Landscape Architect" dashboard with:
 
 ---
 
-## Phase 3: Distributed Tracing (Week 4-6)
+## Phase 3: Distributed Tracing (Now)
 
 **Goal:** Trace a single analysis request across API Lambda → S3 → Worker Lambda → Claude API → DynamoDB.
 
-### Approach: Datadog Extension + datadog-lambda-js
+### Critical: esbuild Compatibility
 
-**Do not use raw `dd-trace`.** It has ~30MB of native modules, known ESM compatibility issues with esbuild-bundled CJS, and adds 500ms-2s to cold starts. Instead, use the `datadog-lambda-js` wrapper library which works with the Extension layer already deployed from Phase 1.
+`dd-trace` is **not compatible with esbuild bundling** due to conditional imports and native modules. The CDK `NodejsFunction` construct uses esbuild by default.
 
-```bash
-pnpm add datadog-lambda-js
-```
+**Solution:** Use the **Datadog Node.js Lambda Layer** (multi-arch, includes pre-built `datadog-lambda-js` + `dd-trace`) and mark them as esbuild externals. Do NOT install `datadog-lambda-js` or `dd-trace` as npm dependencies.
 
-```typescript
-// Worker Lambda entry point
-import { datadog } from 'datadog-lambda-js';
+### 3.1 CDK Changes (ApiStack)
 
-const workerHandler = async (event: WorkerEvent, context: Context) => {
-  // ... existing handler logic
-};
+All tracing changes are in the ApiStack, inside the existing `if (props.ddApiKeySecret)` block. No application code changes required.
 
-export const handler = datadog(workerHandler);
-```
+#### Add the Datadog Node.js Library Layer
 
-The Extension handles trace collection and shipping — no raw `dd-trace` import needed.
-
-### Cross-Lambda trace linking
-
-The API Lambda invokes the Worker with `InvocationType: 'Event'` (async/fire-and-forget). This is a **linked trace** pattern, not a parent-child span — the API Lambda completes and its trace ends before the Worker starts.
-
-Correlation strategy:
-
-- Both traces share the same `analysisId` (logged and indexed as a Datadog facet)
-- Datadog's "Related Traces" feature links them via `analysisId`
-- No manual trace context injection into the Lambda invoke payload needed
-
-### Alternative: AWS X-Ray (zero-dependency)
-
-If Datadog APM costs are a concern, X-Ray provides cross-service tracing with zero new dependencies:
+Add a second Lambda Layer alongside the existing Extension layer. The Node.js layer contains pre-built `datadog-lambda-js` and `dd-trace`.
 
 ```typescript
+// Existing Extension layer — keep at currently deployed version (ARM:65)
+// The Extension contains a Go binary, so it requires the -ARM suffix for ARM64.
+// Upgrading the Extension version is a separate concern; do not bundle
+// with the tracing change. Validate new versions independently.
+const datadogExtension = lambda.LayerVersion.fromLayerVersionArn(
+  this,
+  'DatadogExtension',
+  `arn:aws:lambda:${region}:464622532012:layer:Datadog-Extension-ARM:65`,
+);
+
+// NEW: Datadog Node.js library layer
+// This layer is published as multi-arch (single ARN for x86 and ARM64).
+// Unlike the Extension layer (Go binary), it does NOT require an -ARM suffix.
+// Match to your Lambda's Node.js runtime:
+//   Node 18 → Datadog-Node18-x:133
+//   Node 20 → Datadog-Node20-x:133
+//   Node 22 → Datadog-Node22-x:133
+const datadogNodeLib = lambda.LayerVersion.fromLayerVersionArn(
+  this,
+  'DatadogNodeLib',
+  `arn:aws:lambda:${region}:464622532012:layer:Datadog-Node20-x:133`,
+);
+```
+
+Add both layers to both Lambdas:
+
+```typescript
+for (const fn of [apiLambda, workerLambda]) {
+  fn.addLayers(datadogExtension, datadogNodeLib);
+  // ... existing DD_* env vars ...
+}
+```
+
+#### Add esbuild Externals
+
+For BOTH `NodejsFunction` constructs, mark `datadog-lambda-js` and `dd-trace` as external so esbuild skips them. They're provided by the Layer at runtime.
+
+```typescript
+// API Lambda — add datadog externals alongside existing ones
+const apiLambda = new NodejsFunction(this, 'ApiFunction', {
+  bundling: {
+    externalModules: ['@aws-sdk/*', 'sharp', 'datadog-lambda-js', 'dd-trace'],
+  },
+  // ... other config
+});
+
+// Worker Lambda — same externals
 const workerLambda = new NodejsFunction(this, 'AnalysisWorker', {
-  tracing: lambda.Tracing.ACTIVE,
-  // ...
+  bundling: {
+    externalModules: ['@aws-sdk/*', 'sharp', 'datadog-lambda-js', 'dd-trace'],
+  },
+  // ... other config
 });
 ```
 
-X-Ray is built into the AWS SDK already in use and traces DynamoDB, S3, and Lambda invokes automatically. Evaluate X-Ray vs Datadog APM based on whether the data needs to be in Datadog specifically or just needs trace visibility.
+#### Handler Redirect
+
+The Datadog Node.js layer uses handler redirection to wrap handlers without code changes. For each Lambda:
+
+1. Set `DD_LAMBDA_HANDLER` to the original handler value
+2. Override the Lambda handler to the Datadog wrapper path
+
+**Important:** The API Lambda exports `lambdaHandler` (see `apps/api/src/lambda.ts`), not `handler`. The Worker exports `handler`. Getting these wrong will cause every invocation to 500.
+
+```typescript
+if (props.ddApiKeySecret) {
+  // After construction, set up handler redirect for Datadog tracing
+  for (const { fn, originalHandler } of [
+    { fn: apiLambda, originalHandler: 'index.lambdaHandler' }, // apps/api/src/lambda.ts exports lambdaHandler
+    { fn: workerLambda, originalHandler: 'index.handler' }, // apps/api/src/worker.ts exports handler
+  ]) {
+    fn.addEnvironment('DD_LAMBDA_HANDLER', originalHandler);
+
+    // Override handler at L1 (CfnFunction) level — this is a CDK escape hatch.
+    // The official alternative is datadog-cdk-constructs-v2 which handles this
+    // automatically, but it's heavier. This approach is fine for 2 functions.
+    const cfnFn = fn.node.defaultChild as lambda.CfnFunction;
+    cfnFn.handler = '/opt/nodejs/node_modules/datadog-lambda-js/handler.handler';
+  }
+}
+```
+
+**How it works:** The Datadog wrapper at `/opt/nodejs/node_modules/datadog-lambda-js/handler.handler` reads `DD_LAMBDA_HANDLER`, imports your original handler, wraps it with tracing instrumentation, and calls it. Your handler code is unchanged.
+
+#### Add Tracing Environment Variables
+
+Add to both Lambdas alongside the existing `DD_*` env vars:
+
+```typescript
+fn.addEnvironment('DD_TRACE_ENABLED', 'true');
+fn.addEnvironment('DD_MERGE_XRAY_TRACES', 'false');
+fn.addEnvironment('DD_COLD_START_TRACING', 'true');
+fn.addEnvironment('DD_CAPTURE_LAMBDA_PAYLOAD', 'false');
+fn.addEnvironment('DD_VERSION', props.version ?? 'unset');
+```
+
+Do NOT set `DD_FLUSH_TO_LOG` — with the Extension layer, traces ship directly.
+
+For initial dev deployment, also add `DD_TRACE_DEBUG=true` to verify spans are flowing. **Warning:** This generates ~10x normal log volume. Pair with `DD_LOG_LEVEL=debug` on the Extension to see Extension-side debug logs as well. Remove both before promoting to staging.
+
+#### Accept version prop
+
+Add a `version` prop to ApiStackProps so `DD_VERSION` can be set from the deployment:
+
+```typescript
+interface ApiStackProps extends cdk.StackProps {
+  stage: string;
+  version?: string; // git SHA or package.json version, used for DD_VERSION
+  ddApiKeySecret?: secretsmanager.ISecret;
+}
+```
+
+Wire it in `app.ts`:
+
+```typescript
+const apiStack = new ApiStack(app, `LandscapeArchitect-Api-${stage}`, {
+  stage,
+  version: process.env.VERSION ?? 'local',
+  ddApiKeySecret: observabilityStack.ddApiKeySecret,
+});
+```
+
+In CI, set `VERSION` from the git SHA or tag: `VERSION=$(git rev-parse --short HEAD)`.
+
+### 3.2 Complete DD\_\* Environment Variables
+
+After Phase 3, both Lambdas have these Datadog environment variables:
+
+```
+# From Phase 1 (existing)
+DD_API_KEY_SECRET_ARN=<secret-arn>
+DD_SITE=us5.datadoghq.com
+DD_LOG_LEVEL=info
+DD_SERVERLESS_LOGS_ENABLED=true
+DD_ENV=<stage>
+DD_SERVICE=landscape-architect
+
+# Phase 3 (new)
+DD_TRACE_ENABLED=true
+DD_MERGE_XRAY_TRACES=false
+DD_COLD_START_TRACING=true
+DD_CAPTURE_LAMBDA_PAYLOAD=false
+DD_LAMBDA_HANDLER=<original-handler>
+DD_VERSION=<git-sha-or-version>
+```
+
+`DD_SERVICE`, `DD_ENV`, and `DD_VERSION` together form Datadog's **unified service tagging**. Without `DD_VERSION`, the APM Deployments tab will be empty and you can't correlate traces to specific deploys.
+
+### 3.3 Auto-Instrumentation Coverage
+
+The handler redirect means **zero changes** to API or Worker Lambda source code. The Datadog layer wraps the handler transparently and auto-instruments:
+
+- **AWS SDK v3 calls** — DynamoDB, S3, Lambda invoke, Secrets Manager all appear as spans automatically
+- **Node.js `http`/`https` module calls** — any HTTP client using these modules gets traced
+- **Cold starts** — tracked as spans when `DD_COLD_START_TRACING=true`
+
+**Known gap: Anthropic SDK and `fetch()`** — The `@anthropic-ai/sdk` uses the native `fetch()` API internally (via undici on Node 20), not the `http`/`https` modules. `dd-trace`'s auto-instrumentation patches `http`/`https` but may not patch native `fetch()` depending on the dd-trace version in the layer. This means the Claude API call may not appear as a span automatically.
+
+After deploying, verify whether a Claude API span appears in traces. If missing:
+
+- Try setting `DD_TRACE_FETCH_ENABLED=true` (if supported by the layer version)
+- If still missing, accept this gap — the Claude call duration is already captured by Pino logging (`step:claude`, `duration`) from Phase 1, which is correlated to the trace via `dd.trace_id`
+
+This is a known limitation, not a blocker. Custom spans for fetch-based clients can be added later if needed by importing `dd-trace` from the layer in application code.
+
+### 3.4 Trace-Log Correlation
+
+`dd-trace` automatically injects `dd.trace_id`, `dd.span_id`, and `dd.service` into Pino log output. This means clicking a trace in Datadog APM shows the related logs, and clicking a log shows the related trace.
+
+No Pino configuration changes needed — `dd-trace` patches Pino automatically when it detects it. Existing Pino fields are preserved; the `dd.*` fields are additive.
+
+### 3.5 Cross-Lambda Trace Linking
+
+The API Lambda invokes the Worker via `InvocationType: 'Event'` (async). This creates two separate traces — a **linked trace** pattern, not parent-child. The API trace ends before the Worker starts.
+
+Correlation strategy:
+
+- Both traces share the same `analysisId` (logged by both Lambdas and indexed as a Datadog facet from Phase 1)
+- Datadog's "Related Traces" feature links them via `@analysisId:<value>`
+- No manual trace context injection into the Lambda invoke payload needed
+
+### 3.6 What You'll See in Datadog
+
+After deployment, navigate to **APM → Traces** (at us5.datadoghq.com):
+
+- **API Lambda traces** showing: API Gateway → Lambda handler → DynamoDB (zone lookup) → S3 (pre-signed URL) → Lambda invoke (Worker)
+- **Worker Lambda traces** showing: S3 (photo download) → Secrets Manager → DynamoDB (multiple writes). Claude API call may or may not appear as a span (see section 3.3).
+- **Service Map** showing the relationship between API and Worker services
+- **Flame graphs** for each invocation showing time spent in each operation
+- **Auto-correlated logs** — click any trace to see the Pino logs for that invocation
+- **Deployments tab** — shows performance by `DD_VERSION`, letting you compare before/after a deploy
+
+### 3.7 CDK Test Updates
+
+**Update** the existing Datadog tests in `api-stack.test.ts`. The existing tests identify Lambdas by matching on `Handler: 'index.lambdaHandler'` and `Handler: 'index.handler'`. After the handler redirect, both Lambdas will have `Handler: '/opt/nodejs/node_modules/datadog-lambda-js/handler.handler'`, so you can no longer distinguish them by handler name. Switch to identifying Lambdas by `DD_LAMBDA_HANDLER` env var value or `MemorySize` (API = 512, Worker = 1024).
+
+Updated and new assertions:
+
+- API Lambda has exactly 2 Lambda Layers (Extension + Node.js library) when `ddApiKeySecret` is provided
+- Worker Lambda has exactly 3 Lambda Layers (Sharp + Extension + Node.js library) when `ddApiKeySecret` is provided
+- Both Lambdas have `DD_TRACE_ENABLED=true`
+- Both Lambdas have `DD_LAMBDA_HANDLER` set (API = `index.lambdaHandler`, Worker = `index.handler`)
+- Both Lambdas have handler set to `/opt/nodejs/node_modules/datadog-lambda-js/handler.handler`
+- Both Lambdas have `datadog-lambda-js` and `dd-trace` in `externalModules`
+- Both Lambdas have `DD_VERSION` set
+
+### 3.8 Verification
+
+After deploying to dev:
+
+0. Before deploying, run `cdk synth` and verify the CloudFormation output shows `Handler: /opt/nodejs/node_modules/datadog-lambda-js/handler.handler` for both functions, not the original handler values. This confirms the CfnFunction override took effect.
+1. Trigger an analysis (upload photo, poll for results)
+2. Go to **Datadog → APM → Traces** (at us5.datadoghq.com)
+3. Filter by `service:landscape-architect` and `env:dev`
+4. Verify traces appear with spans for DynamoDB, S3, Secrets Manager
+5. Check whether a Claude API (HTTPS) span appears — if not, see section 3.3
+6. Click a Worker trace → verify the **Logs** tab shows correlated Pino logs
+7. Search by `@analysisId:<value>` to see both API and Worker traces for the same analysis
+8. Check **APM → Services → landscape-architect → Deployments** — verify `DD_VERSION` appears
+
+### 3.9 Rollback
+
+If tracing causes cold start regressions or breaks invocations:
+
+1. Remove the `datadogNodeLib` layer from both Lambdas
+2. Delete the `DD_LAMBDA_HANDLER`, `DD_TRACE_ENABLED`, `DD_COLD_START_TRACING`, `DD_MERGE_XRAY_TRACES`, `DD_CAPTURE_LAMBDA_PAYLOAD`, and `DD_VERSION` environment variables
+3. Revert the `CfnFunction` handler override (restore original handlers)
+4. Deploy
+
+The esbuild externals for `datadog-lambda-js` and `dd-trace` are harmless to leave in place — they're no-ops without the layer present. The Extension layer (for logs) stays untouched.
 
 ---
 
-## Phase 4: Alerting & SLOs (Week 6+)
+## Phase 4: Alerting & SLOs (After Phase 3)
 
 **Goal:** Get notified before users notice problems.
 
@@ -567,12 +785,29 @@ X-Ray is built into the AWS SDK already in use and traces DynamoDB, S3, and Lamb
 
 ## Phase Summary
 
-| Phase                               | What                                                                                                                      | When     | Effort   |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------- | -------- |
-| **1: Structured Logging + Datadog** | Pino logger, Extension layer, explicit log groups, error classification, cold start tracking, request ID correlation, MCP | Now      | 1-2 days |
-| **2: Metrics & Dashboards**         | Log-based metrics, enhanced Lambda metrics, dashboard                                                                     | Week 2-3 | Half day |
-| **3: Tracing**                      | datadog-lambda-js + Extension, linked traces via analysisId, evaluate X-Ray                                               | Week 4-6 | 1 day    |
-| **4: Alerting & SLOs**              | Monitors with errorCategory/errorRetryable filtering, SLOs                                                                | Week 6+  | Half day |
+| Phase                               | What                                                                                                                            | When          | Effort   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
+| **1: Structured Logging + Datadog** | Pino logger, Extension layer, explicit log groups, error classification, cold start tracking, request ID correlation, MCP       | Deployed      | 1-2 days |
+| **3: Distributed Tracing**          | Datadog Node.js Library Layer, handler redirect, esbuild externals, auto-instrumented traces, trace-log correlation, DD_VERSION | Now           | Half day |
+| **2: Metrics & Dashboards**         | Log-based metrics, enhanced Lambda metrics, dashboard                                                                           | After Phase 3 | Half day |
+| **4: Alerting & SLOs**              | Monitors with errorCategory/errorRetryable filtering, SLOs                                                                      | After Phase 3 | Half day |
+
+---
+
+## Risks & Mitigations
+
+| Risk                                           | Impact                                                                                                 | Mitigation                                                                                                                                                                                                                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| dd-trace cold start overhead                   | Additional 200-500ms on cold starts from dd-trace initialization (separate from the Extension's ~50ms) | Worker has 120s timeout so 200-500ms is negligible (~0.4%); API Lambda has 30s timeout and sub-1s typical response, so cold start impact is proportionally larger but acceptable for debugging value. Monitor `DD_COLD_START_TRACING` spans to quantify actual impact. |
+| esbuild external misconfiguration              | Lambda fails to start with module not found                                                            | CDK tests verify externals are set; test in dev before staging/prod                                                                                                                                                                                                    |
+| Handler redirect breaks existing handler       | Lambda invocations fail                                                                                | API exports `lambdaHandler`, Worker exports `handler` — must match exactly; CDK tests verify; test in dev                                                                                                                                                              |
+| Wrong handler export name in DD_LAMBDA_HANDLER | Every invocation returns 500                                                                           | Spec documents exact export names with source file references                                                                                                                                                                                                          |
+| x86 Extension layer on ARM Lambda              | Lambda fails at invocation time                                                                        | Extension layer uses `-ARM` suffix; Node.js library layer is multi-arch (no suffix needed); CDK tests could verify architecture match                                                                                                                                  |
+| DD_SITE mismatch (wrong Datadog region)        | Traces/logs sent to wrong site, silently lost                                                          | Hardcoded to `us5.datadoghq.com` matching deployed infra                                                                                                                                                                                                               |
+| dd-trace patches Pino log format               | Log pipeline breaks                                                                                    | dd-trace adds fields (`dd.trace_id`, `dd.span_id`) but doesn't change existing ones; existing Pino fields preserved                                                                                                                                                    |
+| Anthropic SDK uses fetch(), not http           | Claude API call missing from traces                                                                    | Pino logs capture timing; try `DD_TRACE_FETCH_ENABLED=true`; accept gap if needed                                                                                                                                                                                      |
+| Layer version incompatibility                  | Traces not shipped                                                                                     | Pin both layers to specific versions; keep Extension at deployed v65 for now                                                                                                                                                                                           |
+| CfnFunction escape hatch breaks in future CDK  | Handler override silently ignored                                                                      | Alternative: `datadog-cdk-constructs-v2` handles this officially; monitor CDK release notes                                                                                                                                                                            |
 
 ---
 
@@ -584,6 +819,6 @@ At current scale (<100 analyses/day):
 - Extension cold start overhead: ~50ms per cold start
 - Log ingestion: <1GB/month → free tier or ~$1/month
 - Custom metrics (Phase 2): 5-10 metrics → free tier
-- APM (Phase 3): Datadog APM pricing applies if not on free tier; X-Ray alternative is free-tier eligible
+- Serverless APM (Phase 3): Per-invocation billing, no APM Host charges for Lambda. Pricing is usage-based and changes — see [Datadog Serverless Billing](https://docs.datadoghq.com/account_management/billing/serverless/) for current rates. At 2 functions × 3 environments × ~100 invocations/day, expect <$10/month.
 
 At scale this grows, but for early development the cost is negligible.

@@ -15,6 +15,7 @@ import type { Construct } from 'constructs';
 
 export interface ApiStackProps extends StackProps {
   stage: string;
+  version?: string;
   ddApiKeySecret?: secretsmanager.ISecret;
 }
 
@@ -71,7 +72,7 @@ export class ApiStack extends Stack {
       bundling: {
         format: nodejs.OutputFormat.CJS,
         target: 'node20',
-        externalModules: ['@aws-sdk/*', 'sharp'],
+        externalModules: ['@aws-sdk/*', 'sharp', 'datadog-lambda-js', 'dd-trace'],
       },
       environment: {
         TABLE_NAME: tableName,
@@ -99,7 +100,7 @@ export class ApiStack extends Stack {
       bundling: {
         format: nodejs.OutputFormat.CJS,
         target: 'node20',
-        externalModules: ['@aws-sdk/*', 'sharp'],
+        externalModules: ['@aws-sdk/*', 'sharp', 'datadog-lambda-js', 'dd-trace'],
       },
       environment: {
         TABLE_NAME: tableName,
@@ -117,24 +118,51 @@ export class ApiStack extends Stack {
     this.apiLambda = apiFn;
     this.workerLambda = workerFn;
 
-    // ── Datadog Extension (gated on API key secret) ──────────────────
+    // ── Datadog Extension + Tracing (gated on API key secret) ────────
     if (props.ddApiKeySecret) {
       const region = Stack.of(this).region;
+
+      // Extension layer (ARM variant — contains Go binary)
       const datadogExtension = lambda.LayerVersion.fromLayerVersionArn(
         this,
         'DatadogExtension',
         `arn:aws:lambda:${region}:464622532012:layer:Datadog-Extension-ARM:65`,
       );
 
+      // Node.js library layer (multi-arch — contains datadog-lambda-js + dd-trace)
+      const datadogNodeLib = lambda.LayerVersion.fromLayerVersionArn(
+        this,
+        'DatadogNodeLib',
+        `arn:aws:lambda:${region}:464622532012:layer:Datadog-Node20-x:133`,
+      );
+
       for (const fn of [apiFn, workerFn]) {
-        fn.addLayers(datadogExtension);
+        fn.addLayers(datadogExtension, datadogNodeLib);
         fn.addEnvironment('DD_API_KEY_SECRET_ARN', props.ddApiKeySecret.secretArn);
         fn.addEnvironment('DD_SITE', 'us5.datadoghq.com');
         fn.addEnvironment('DD_LOG_LEVEL', 'info');
         fn.addEnvironment('DD_SERVERLESS_LOGS_ENABLED', 'true');
         fn.addEnvironment('DD_ENV', props.stage);
         fn.addEnvironment('DD_SERVICE', 'landscape-architect');
+        fn.addEnvironment('DD_TRACE_ENABLED', 'true');
+        fn.addEnvironment('DD_MERGE_XRAY_TRACES', 'false');
+        fn.addEnvironment('DD_COLD_START_TRACING', 'true');
+        fn.addEnvironment('DD_CAPTURE_LAMBDA_PAYLOAD', 'false');
+        fn.addEnvironment('DD_VERSION', props.version ?? 'unset');
         props.ddApiKeySecret.grantRead(fn);
+      }
+
+      // Handler redirect — Datadog wrapper imports the original handler via DD_LAMBDA_HANDLER
+      for (const { fn, originalHandler } of [
+        { fn: apiFn, originalHandler: 'index.lambdaHandler' },
+        { fn: workerFn, originalHandler: 'index.handler' },
+      ]) {
+        fn.addEnvironment('DD_LAMBDA_HANDLER', originalHandler);
+        // Override handler at L1 (CfnFunction) level — this is a CDK escape hatch.
+        // The official alternative is datadog-cdk-constructs-v2 which handles this
+        // automatically, but it's heavier. This approach is fine for 2 functions.
+        const cfnFn = fn.node.defaultChild as lambda.CfnFunction;
+        cfnFn.handler = '/opt/nodejs/node_modules/datadog-lambda-js/handler.handler';
       }
     }
 
