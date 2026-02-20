@@ -62,12 +62,12 @@ All five must pass. CI also runs `pnpm test:contract`, `pnpm test:integration`, 
 
 ### Test File Conventions
 
-| Package | Location | Pattern |
-|---------|----------|---------|
-| API | `apps/api/__tests__/{unit,contract,integration}/` | Separated by test type |
-| Web | `apps/web/src/pages/*.test.tsx` | Co-located with pages |
-| Shared | `packages/shared/src/schemas/*.test.ts` | Co-located with schemas |
-| Infra | `infra/__tests__/assertion/` | One file per stack |
+| Package | Location                                          | Pattern                 |
+| ------- | ------------------------------------------------- | ----------------------- |
+| API     | `apps/api/__tests__/{unit,contract,integration}/` | Separated by test type  |
+| Web     | `apps/web/src/pages/*.test.tsx`                   | Co-located with pages   |
+| Shared  | `packages/shared/src/schemas/*.test.ts`           | Co-located with schemas |
+| Infra   | `infra/__tests__/assertion/`                      | One file per stack      |
 
 ### Coverage Thresholds
 
