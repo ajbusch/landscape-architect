@@ -268,4 +268,36 @@ describe('ApiStack with Datadog Extension + Tracing', () => {
       });
     }
   });
+
+  it('sets LLM Observability env vars on Worker Lambda only', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      MemorySize: 1024,
+      Environment: {
+        Variables: Match.objectLike({
+          DD_LLMOBS_ENABLED: '1',
+          DD_LLMOBS_ML_APP: 'landscape-architect',
+        }),
+      },
+    });
+
+    // API Lambda must NOT have LLM Observability enabled
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      MemorySize: 512,
+      Environment: {
+        Variables: Match.objectLike({
+          DD_SITE: 'us5.datadoghq.com',
+        }),
+      },
+    });
+    // Verify DD_LLMOBS_ENABLED is absent on API Lambda by checking
+    // the synth output does not include it for the 512MB function
+    const apiFunction = template.findResources('AWS::Lambda::Function', {
+      Properties: { MemorySize: 512 },
+    });
+    const apiFnLogicalId = Object.keys(apiFunction)[0];
+    const apiEnvVars = apiFunction[apiFnLogicalId].Properties.Environment.Variables;
+    if ('DD_LLMOBS_ENABLED' in apiEnvVars) {
+      throw new Error('API Lambda should NOT have DD_LLMOBS_ENABLED set');
+    }
+  });
 });

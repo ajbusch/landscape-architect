@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 1 deployed. Phase 3 ready for implementation.
+Phase 1 deployed. Phase 3 deployed. Phase 3.5 ready for implementation.
 
 ## Context
 
@@ -460,7 +460,7 @@ claude mcp add datadog -- ~/.local/bin/datadog_mcp_cli \
 
 ---
 
-## Phase 2: Metrics & Dashboards (After Phase 3)
+## Phase 2: Metrics & Dashboards (After Phase 3.5)
 
 **Goal:** Understand performance characteristics and usage patterns.
 
@@ -502,7 +502,7 @@ Create a "Landscape Architect" dashboard with:
 
 ---
 
-## Phase 3: Distributed Tracing (Now)
+## Phase 3: Distributed Tracing (Deployed)
 
 **Goal:** Trace a single analysis request across API Lambda → S3 → Worker Lambda → Claude API → DynamoDB.
 
@@ -686,6 +686,8 @@ After deploying, verify whether a Claude API span appears in traces. If missing:
 
 This is a known limitation, not a blocker. Custom spans for fetch-based clients can be added later if needed by importing `dd-trace` from the layer in application code.
 
+**Phase 3.5 note:** LLM Observability (section 3.5) provides complementary coverage by instrumenting `messages.create()` directly. LLM spans capture prompts, responses, and token usage in the LLM Observability UI. This is complementary — not a replacement — for the APM fetch() gap, as LLM spans appear in a separate Datadog product, not in the APM flame graph.
+
 ### 3.4 Trace-Log Correlation
 
 `dd-trace` automatically injects `dd.trace_id`, `dd.span_id`, and `dd.service` into Pino log output. This means clicking a trace in Datadog APM shows the related logs, and clicking a log shows the related trace.
@@ -754,7 +756,135 @@ The esbuild externals for `datadog-lambda-js` and `dd-trace` are harmless to lea
 
 ---
 
-## Phase 4: Alerting & SLOs (After Phase 3)
+## Phase 3.5: LLM Observability (After Phase 3)
+
+**Goal:** Get full visibility into Claude API calls — see the exact prompt sent, the full response returned, token usage, latency, and estimated cost for every analysis. This is critical for prompt debugging and iteration.
+
+### Why This Matters
+
+The Phase 3 tracing setup has a known gap: the Anthropic SDK uses `fetch()` internally, so the Claude API call may not appear as a standard APM span. LLM Observability addresses this with a dedicated Anthropic integration that instruments `Anthropic().messages.create()` directly. It captures everything standard HTTP tracing misses: the full system prompt, user message, Claude's JSON response, token counts (input + output), model name, and estimated cost in dollars.
+
+This is separate from (and complementary to) APM distributed tracing. APM traces show the infrastructure path (DynamoDB → S3 → HTTP → etc.), while LLM Observability shows the AI-specific path (what was asked → what was returned → was it useful). LLM spans appear in the LLM Observability UI, not in the APM flame graph.
+
+### 3.5.1 What LLM Observability Provides
+
+For every `client.messages.create()` call in the Worker Lambda:
+
+- **Input prompt**: Full system prompt + user message (including the base64 image reference)
+- **Output response**: The full JSON response from Claude
+- **Token usage**: Input tokens, output tokens, total tokens
+- **Cost estimation**: Estimated USD cost per call using Anthropic's public pricing
+- **Latency**: Duration of the Claude API call
+- **Model**: Which model was used (`claude-sonnet-4-20250514`, etc.)
+- **Errors**: Any API errors with status codes and messages
+- **Sensitive Data Scanner**: Automatic PII detection in prompts/responses (bundled with LLM Observability at no extra cost — 1 GB SDS per 10K LLM requests)
+
+### 3.5.2 How It Works
+
+The `dd-trace` library in the Datadog Node.js Lambda Layer includes an Anthropic plugin. When LLM Observability is enabled, this plugin auto-instruments `Anthropic().messages.create()` calls and emits LLM spans to the LLM Observability product.
+
+**This requires no application code changes.** The instrumentation happens at the library level via the same handler redirect and `dd-trace` patching mechanism from Phase 3.
+
+**Important: Verify dd-trace version.** The Anthropic plugin was added to dd-trace relatively recently. After deploying, verify the dd-trace version in the layer supports it by checking the Lambda logs for LLM spans. If no LLM spans appear despite `DD_LLMOBS_ENABLED=1`, the layer's dd-trace version may be too old — bump to a newer `Datadog-Node20-x` layer version. You can check the version by logging `require('dd-trace/package.json').version` from a test invocation.
+
+### 3.5.3 CDK Changes (Worker Lambda Only)
+
+Add two environment variables to the **Worker Lambda only** (it's the only function that calls Claude). These go inside the existing `if (props.ddApiKeySecret)` block:
+
+```typescript
+workerLambda.addEnvironment('DD_LLMOBS_ENABLED', '1');
+workerLambda.addEnvironment('DD_LLMOBS_ML_APP', 'landscape-architect');
+```
+
+That's it. The existing `DD_SITE`, `DD_ENV`, `DD_SERVICE`, and `DD_VERSION` are inherited automatically. The Datadog Extension (already present) handles flushing LLM spans — no agentless mode needed in Lambda.
+
+**Do NOT add these to the API Lambda** — it doesn't make Claude calls, and enabling LLM Observability on it would create noise.
+
+**Note on DD_LLMOBS_ENABLED format:** Datadog's Python library uses `1`, while some Node.js env vars use `true`. The dd-trace Node.js docs specify `1` for this variable. If LLM spans don't appear after deployment, try `true` as a fallback.
+
+### 3.5.4 Complete DD\_\* Environment Variables (Worker Lambda, After Phase 3.5)
+
+```
+# From Phase 1 (existing)
+DD_API_KEY_SECRET_ARN=<secret-arn>
+DD_SITE=us5.datadoghq.com
+DD_LOG_LEVEL=info
+DD_SERVERLESS_LOGS_ENABLED=true
+DD_ENV=<stage>
+DD_SERVICE=landscape-architect
+
+# From Phase 3 (existing)
+DD_TRACE_ENABLED=true
+DD_MERGE_XRAY_TRACES=false
+DD_COLD_START_TRACING=true
+DD_CAPTURE_LAMBDA_PAYLOAD=false
+DD_LAMBDA_HANDLER=index.handler
+DD_VERSION=<git-sha-or-version>
+
+# Phase 3.5 (new — Worker only)
+DD_LLMOBS_ENABLED=1
+DD_LLMOBS_ML_APP=landscape-architect
+```
+
+### 3.5.5 Datadog UI Configuration
+
+After deploying, configure in the Datadog UI (at us5.datadoghq.com):
+
+1. **Enable the Anthropic integration tile** (optional, for cost estimation): Navigate to Integrations → Anthropic → Configure tab. Add your Anthropic API key with **read-only** permissions. This enables Datadog to provide cost estimation using Anthropic's published pricing. **Write permission is NOT required** unless you later enable Datadog's own LLM quality evaluations (optional feature, see step 5).
+
+2. **View LLM traces**: Navigate to LLM Observability → Traces. Filter by `ml_app:landscape-architect`. Each Worker invocation that calls Claude will show an LLM span with the full prompt and response.
+
+3. **Inspect prompts**: Click any LLM trace to see the system prompt, user message, and Claude's JSON response side-by-side. This is the primary debugging workflow for prompt issues — when Claude returns invalid JSON or bad recommendations, you can see exactly what was sent and what came back.
+
+4. **Cost dashboard**: Navigate to LLM Observability → Cost. View per-model cost breakdown, token usage trends, and the most expensive calls. Useful for tracking whether prompt changes increase or decrease token consumption.
+
+5. **Quality evaluations** (optional, future): Datadog provides out-of-the-box evaluations for hallucination detection, prompt injection, and toxic content. These require write permission on the Anthropic integration tile and can be enabled later if needed.
+
+### 3.5.6 Security Considerations
+
+- **System prompt is sent to Datadog**: LLM Observability captures the full input prompt including the system prompt. The system prompt contains the landscape analysis schema, scoring rubric, plant identification instructions, and JSON output format — this is proprietary prompt engineering. Anyone with Datadog LLM Observability access can read it. This is acceptable for this project but should be a conscious decision.
+- **User data exposure is minimal**: The user's ZIP code is NOT in the prompt (only the resolved USDA zone). No PII is sent to Claude.
+- **Base64 image capture**: The user's photo is sent to Claude as base64. Whether this is captured in the LLM span depends on span size limits — test in dev to confirm. If captured, this increases span size and may affect billing.
+- **Sensitive Data Scanner**: LLM Observability includes bundled SDS at no extra cost (1 GB per 10K LLM requests). Enable scanning rules as defense-in-depth.
+
+### 3.5.7 CDK Test Updates
+
+Add to `api-stack.test.ts`:
+
+- Worker Lambda has `DD_LLMOBS_ENABLED=1` when `ddApiKeySecret` is provided
+- Worker Lambda has `DD_LLMOBS_ML_APP=landscape-architect`
+- API Lambda does NOT have `DD_LLMOBS_ENABLED` set
+
+### 3.5.8 Verification
+
+After deploying to dev:
+
+1. Trigger an analysis (upload photo, poll for results)
+2. Check Lambda logs for any dd-trace warnings about unsupported Anthropic instrumentation (would indicate the layer's dd-trace version is too old)
+3. Go to **LLM Observability → Traces** (at us5.datadoghq.com)
+4. Filter by `ml_app:landscape-architect` and `env:dev`
+5. Click the LLM span and verify:
+   - System prompt is visible (the full landscape architect prompt)
+   - User message includes "USDA Hardiness Zone" text
+   - Response shows Claude's JSON output
+   - Token counts (input + output) are populated
+   - Model name shows the correct Claude model
+   - Cost estimate is populated (requires Anthropic integration tile)
+6. Check whether the base64 image is captured in the span — note the span size for cost estimation
+7. Cross-reference with APM: the LLM span should appear nested within the Worker's APM trace
+
+### 3.5.9 Rollback
+
+If LLM Observability causes issues or you want to disable it:
+
+1. Remove `DD_LLMOBS_ENABLED` and `DD_LLMOBS_ML_APP` environment variables from the Worker Lambda
+2. Deploy
+
+APM tracing (Phase 3) continues to work independently. No other changes needed.
+
+---
+
+## Phase 4: Alerting & SLOs (After Phase 2)
 
 **Goal:** Get notified before users notice problems.
 
@@ -785,12 +915,13 @@ The esbuild externals for `datadog-lambda-js` and `dd-trace` are harmless to lea
 
 ## Phase Summary
 
-| Phase                               | What                                                                                                                            | When          | Effort   |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
-| **1: Structured Logging + Datadog** | Pino logger, Extension layer, explicit log groups, error classification, cold start tracking, request ID correlation, MCP       | Deployed      | 1-2 days |
-| **3: Distributed Tracing**          | Datadog Node.js Library Layer, handler redirect, esbuild externals, auto-instrumented traces, trace-log correlation, DD_VERSION | Now           | Half day |
-| **2: Metrics & Dashboards**         | Log-based metrics, enhanced Lambda metrics, dashboard                                                                           | After Phase 3 | Half day |
-| **4: Alerting & SLOs**              | Monitors with errorCategory/errorRetryable filtering, SLOs                                                                      | After Phase 3 | Half day |
+| Phase                               | What                                                                                                                            | When            | Effort   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------- | -------- |
+| **1: Structured Logging + Datadog** | Pino logger, Extension layer, explicit log groups, error classification, cold start tracking, request ID correlation, MCP       | Deployed        | 1-2 days |
+| **3: Distributed Tracing**          | Datadog Node.js Library Layer, handler redirect, esbuild externals, auto-instrumented traces, trace-log correlation, DD_VERSION | Deployed        | Half day |
+| **3.5: LLM Observability**          | Anthropic auto-instrumentation, prompt/response capture, token usage, cost tracking                                             | Now             | 1 hour   |
+| **2: Metrics & Dashboards**         | Log-based metrics, enhanced Lambda metrics, dashboard                                                                           | After Phase 3.5 | Half day |
+| **4: Alerting & SLOs**              | Monitors with errorCategory/errorRetryable filtering, SLOs                                                                      | After Phase 2   | Half day |
 
 ---
 
@@ -805,9 +936,12 @@ The esbuild externals for `datadog-lambda-js` and `dd-trace` are harmless to lea
 | x86 Extension layer on ARM Lambda              | Lambda fails at invocation time                                                                        | Extension layer uses `-ARM` suffix; Node.js library layer is multi-arch (no suffix needed); CDK tests could verify architecture match                                                                                                                                  |
 | DD_SITE mismatch (wrong Datadog region)        | Traces/logs sent to wrong site, silently lost                                                          | Hardcoded to `us5.datadoghq.com` matching deployed infra                                                                                                                                                                                                               |
 | dd-trace patches Pino log format               | Log pipeline breaks                                                                                    | dd-trace adds fields (`dd.trace_id`, `dd.span_id`) but doesn't change existing ones; existing Pino fields preserved                                                                                                                                                    |
-| Anthropic SDK uses fetch(), not http           | Claude API call missing from traces                                                                    | Pino logs capture timing; try `DD_TRACE_FETCH_ENABLED=true`; accept gap if needed                                                                                                                                                                                      |
+| Anthropic SDK uses fetch(), not http           | Claude API call missing from APM traces                                                                | Pino logs capture timing; try `DD_TRACE_FETCH_ENABLED=true`; Phase 3.5 LLM Observability provides complementary coverage in a separate UI; accept APM gap if needed                                                                                                    |
 | Layer version incompatibility                  | Traces not shipped                                                                                     | Pin both layers to specific versions; keep Extension at deployed v65 for now                                                                                                                                                                                           |
 | CfnFunction escape hatch breaks in future CDK  | Handler override silently ignored                                                                      | Alternative: `datadog-cdk-constructs-v2` handles this officially; monitor CDK release notes                                                                                                                                                                            |
+| LLM Observability captures full prompts        | System prompt (analysis schema, scoring rubric) and Claude responses stored in Datadog                 | No user PII in prompts (only USDA zone, not ZIP/address); system prompt is proprietary but not secret; enable SDS scanning rules as defense-in-depth                                                                                                                   |
+| LLM Observability per-span billing             | Unexpected Datadog cost at scale                                                                       | Billed per LLM span (1 span per `messages.create()` call); at <100 analyses/day ≈ ~3,000 spans/month; monitor via LLM Observability → Cost view; test base64 image span size in dev                                                                                    |
+| dd-trace Anthropic plugin not in layer         | LLM Observability silently does nothing                                                                | Verify LLM spans appear after first deploy; check dd-trace version in layer; bump `Datadog-Node20-x` layer version if needed                                                                                                                                           |
 
 ---
 
@@ -820,5 +954,6 @@ At current scale (<100 analyses/day):
 - Log ingestion: <1GB/month → free tier or ~$1/month
 - Custom metrics (Phase 2): 5-10 metrics → free tier
 - Serverless APM (Phase 3): Per-invocation billing, no APM Host charges for Lambda. Pricing is usage-based and changes — see [Datadog Serverless Billing](https://docs.datadoghq.com/account_management/billing/serverless/) for current rates. At 2 functions × 3 environments × ~100 invocations/day, expect <$10/month.
+- LLM Observability (Phase 3.5): Billed per LLM span. Each `messages.create()` call = 1 span. At ~100 analyses/day = ~3,000 spans/month. Estimate $5-15/month at current volume. See [Datadog LLM Observability Pricing](https://www.datadoghq.com/pricing/) for current per-span rates. Includes bundled Sensitive Data Scanner (1 GB per 10K requests). This is a separate Datadog product with its own billing — verify your plan includes it.
 
 At scale this grows, but for early development the cost is negligible.
