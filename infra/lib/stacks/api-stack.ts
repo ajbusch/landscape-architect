@@ -145,7 +145,7 @@ export class ApiStack extends Stack {
       const datadogNodeLib = lambda.LayerVersion.fromLayerVersionArn(
         this,
         'DatadogNodeLib',
-        `arn:aws:lambda:${region}:464622532012:layer:Datadog-Node20-x:133`,
+        `arn:aws:lambda:${region}:464622532012:layer:Datadog-Node20-x:134`,
       );
 
       for (const fn of [apiFn, workerFn]) {
@@ -178,6 +178,7 @@ export class ApiStack extends Stack {
       }
 
       // ── LLM Observability (Worker only — it's the only function that calls Claude) ──
+      workerFn.addEnvironment('DD_TRACE_ANTHROPIC_ENABLED', 'true');
       workerFn.addEnvironment('DD_LLMOBS_ENABLED', 'true');
       workerFn.addEnvironment('DD_LLMOBS_ML_APP', 'landscape-architect');
     }

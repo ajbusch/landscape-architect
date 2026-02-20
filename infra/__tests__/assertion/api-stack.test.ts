@@ -305,6 +305,7 @@ describe('ApiStack with Datadog Extension + Tracing', () => {
       MemorySize: 1024,
       Environment: {
         Variables: Match.objectLike({
+          DD_TRACE_ANTHROPIC_ENABLED: 'true',
           DD_LLMOBS_ENABLED: 'true',
           DD_LLMOBS_ML_APP: 'landscape-architect',
         }),
