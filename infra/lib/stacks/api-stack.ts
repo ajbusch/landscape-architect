@@ -84,6 +84,9 @@ export class ApiStack extends Stack {
         format: nodejs.OutputFormat.CJS,
         target: 'node20',
         externalModules: ['@aws-sdk/*', 'sharp', 'datadog-lambda-js', 'dd-trace'],
+        // Install @anthropic-ai/sdk into node_modules/ instead of inlining it so
+        // dd-trace can patch require('@anthropic-ai/sdk') for LLM Observability.
+        nodeModules: ['@anthropic-ai/sdk'],
       },
       environment: {
         TABLE_NAME: tableName,
