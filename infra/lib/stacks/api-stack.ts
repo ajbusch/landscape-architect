@@ -164,6 +164,10 @@ export class ApiStack extends Stack {
         const cfnFn = fn.node.defaultChild as lambda.CfnFunction;
         cfnFn.handler = '/opt/nodejs/node_modules/datadog-lambda-js/handler.handler';
       }
+
+      // ── LLM Observability (Worker only — it's the only function that calls Claude) ──
+      workerFn.addEnvironment('DD_LLMOBS_ENABLED', '1');
+      workerFn.addEnvironment('DD_LLMOBS_ML_APP', 'landscape-architect');
     }
 
     const isProd = props.stage === 'prod';
