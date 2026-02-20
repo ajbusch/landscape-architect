@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 1 deployed. Phase 3 deployed. Phase 3.5 ready for implementation.
+Phase 1 deployed. Phase 3 deployed. Phase 3.5 deployed.
 
 ## Context
 
@@ -756,7 +756,7 @@ The esbuild externals for `datadog-lambda-js` and `dd-trace` are harmless to lea
 
 ---
 
-## Phase 3.5: LLM Observability (After Phase 3)
+## Phase 3.5: LLM Observability (Deployed)
 
 **Goal:** Get full visibility into Claude API calls — see the exact prompt sent, the full response returned, token usage, latency, and estimated cost for every analysis. This is critical for prompt debugging and iteration.
 
@@ -785,22 +785,41 @@ The `dd-trace` library in the Datadog Node.js Lambda Layer includes an Anthropic
 
 **This requires no application code changes.** The instrumentation happens at the library level via the same handler redirect and `dd-trace` patching mechanism from Phase 3.
 
-**Important: Verify dd-trace version.** The Anthropic plugin was added to dd-trace relatively recently. After deploying, verify the dd-trace version in the layer supports it by checking the Lambda logs for LLM spans. If no LLM spans appear despite `DD_LLMOBS_ENABLED=1`, the layer's dd-trace version may be too old — bump to a newer `Datadog-Node20-x` layer version. You can check the version by logging `require('dd-trace/package.json').version` from a test invocation.
+**Critical: `@anthropic-ai/sdk` must NOT be bundled by esbuild.** dd-trace instruments modules by patching Node's `require()` at runtime. If esbuild inlines the Anthropic SDK into the Lambda bundle, dd-trace never sees a `require('@anthropic-ai/sdk')` call and the Anthropic plugin silently does nothing. The fix is to add `@anthropic-ai/sdk` to the CDK `nodeModules` bundling option, which causes CDK to externalize it from esbuild and install it into the Lambda package's `node_modules/` directory separately.
+
+**Critical: `DD_TRACE_ANTHROPIC_ENABLED=true` is required.** The dd-trace Anthropic plugin is opt-in — it does not activate by default even when `DD_LLMOBS_ENABLED=true` is set. You must explicitly set `DD_TRACE_ANTHROPIC_ENABLED=true` on the Worker Lambda.
+
+**Layer version requirement:** The Anthropic plugin requires `Datadog-Node20-x` layer version 134+ (dd-trace with Anthropic support). Layer version 133 and below do not include the plugin.
 
 ### 3.5.3 CDK Changes (Worker Lambda Only)
 
-Add two environment variables to the **Worker Lambda only** (it's the only function that calls Claude). These go inside the existing `if (props.ddApiKeySecret)` block:
+Two changes are needed:
+
+**1. Bundling: externalize `@anthropic-ai/sdk`** so dd-trace can patch it at runtime:
 
 ```typescript
-workerLambda.addEnvironment('DD_LLMOBS_ENABLED', '1');
-workerLambda.addEnvironment('DD_LLMOBS_ML_APP', 'landscape-architect');
+const workerFn = new nodejs.NodejsFunction(this, 'WorkerFunction', {
+  // ...
+  bundling: {
+    format: nodejs.OutputFormat.CJS,
+    target: 'node20',
+    externalModules: ['@aws-sdk/*', 'sharp', 'datadog-lambda-js', 'dd-trace'],
+    nodeModules: ['@anthropic-ai/sdk'],
+  },
+});
 ```
 
-That's it. The existing `DD_SITE`, `DD_ENV`, `DD_SERVICE`, and `DD_VERSION` are inherited automatically. The Datadog Extension (already present) handles flushing LLM spans — no agentless mode needed in Lambda.
+**2. Environment variables**: Add three env vars to the **Worker Lambda only** inside the existing `if (props.ddApiKeySecret)` block:
+
+```typescript
+workerFn.addEnvironment('DD_TRACE_ANTHROPIC_ENABLED', 'true');
+workerFn.addEnvironment('DD_LLMOBS_ENABLED', 'true');
+workerFn.addEnvironment('DD_LLMOBS_ML_APP', 'landscape-architect');
+```
+
+The existing `DD_SITE`, `DD_ENV`, `DD_SERVICE`, and `DD_VERSION` are inherited automatically. The Datadog Extension (already present) handles flushing LLM spans — no agentless mode needed in Lambda.
 
 **Do NOT add these to the API Lambda** — it doesn't make Claude calls, and enabling LLM Observability on it would create noise.
-
-**Note on DD_LLMOBS_ENABLED format:** Datadog's Python library uses `1`, while some Node.js env vars use `true`. The dd-trace Node.js docs specify `1` for this variable. If LLM spans don't appear after deployment, try `true` as a fallback.
 
 ### 3.5.4 Complete DD\_\* Environment Variables (Worker Lambda, After Phase 3.5)
 
@@ -822,7 +841,8 @@ DD_LAMBDA_HANDLER=index.handler
 DD_VERSION=<git-sha-or-version>
 
 # Phase 3.5 (new — Worker only)
-DD_LLMOBS_ENABLED=1
+DD_TRACE_ANTHROPIC_ENABLED=true
+DD_LLMOBS_ENABLED=true
 DD_LLMOBS_ML_APP=landscape-architect
 ```
 
@@ -851,7 +871,8 @@ After deploying, configure in the Datadog UI (at us5.datadoghq.com):
 
 Add to `api-stack.test.ts`:
 
-- Worker Lambda has `DD_LLMOBS_ENABLED=1` when `ddApiKeySecret` is provided
+- Worker Lambda has `DD_TRACE_ANTHROPIC_ENABLED=true` when `ddApiKeySecret` is provided
+- Worker Lambda has `DD_LLMOBS_ENABLED=true` when `ddApiKeySecret` is provided
 - Worker Lambda has `DD_LLMOBS_ML_APP=landscape-architect`
 - API Lambda does NOT have `DD_LLMOBS_ENABLED` set
 
@@ -877,7 +898,7 @@ After deploying to dev:
 
 If LLM Observability causes issues or you want to disable it:
 
-1. Remove `DD_LLMOBS_ENABLED` and `DD_LLMOBS_ML_APP` environment variables from the Worker Lambda
+1. Remove `DD_TRACE_ANTHROPIC_ENABLED`, `DD_LLMOBS_ENABLED`, and `DD_LLMOBS_ML_APP` environment variables from the Worker Lambda
 2. Deploy
 
 APM tracing (Phase 3) continues to work independently. No other changes needed.
@@ -919,7 +940,7 @@ APM tracing (Phase 3) continues to work independently. No other changes needed.
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------- | -------- |
 | **1: Structured Logging + Datadog** | Pino logger, Extension layer, explicit log groups, error classification, cold start tracking, request ID correlation, MCP       | Deployed        | 1-2 days |
 | **3: Distributed Tracing**          | Datadog Node.js Library Layer, handler redirect, esbuild externals, auto-instrumented traces, trace-log correlation, DD_VERSION | Deployed        | Half day |
-| **3.5: LLM Observability**          | Anthropic auto-instrumentation, prompt/response capture, token usage, cost tracking                                             | Now             | 1 hour   |
+| **3.5: LLM Observability**          | Anthropic auto-instrumentation, prompt/response capture, token usage, cost tracking                                             | Deployed        | 1 hour   |
 | **2: Metrics & Dashboards**         | Log-based metrics, enhanced Lambda metrics, dashboard                                                                           | After Phase 3.5 | Half day |
 | **4: Alerting & SLOs**              | Monitors with errorCategory/errorRetryable filtering, SLOs                                                                      | After Phase 2   | Half day |
 
@@ -941,7 +962,7 @@ APM tracing (Phase 3) continues to work independently. No other changes needed.
 | CfnFunction escape hatch breaks in future CDK  | Handler override silently ignored                                                                      | Alternative: `datadog-cdk-constructs-v2` handles this officially; monitor CDK release notes                                                                                                                                                                            |
 | LLM Observability captures full prompts        | System prompt (analysis schema, scoring rubric) and Claude responses stored in Datadog                 | No user PII in prompts (only USDA zone, not ZIP/address); system prompt is proprietary but not secret; enable SDS scanning rules as defense-in-depth                                                                                                                   |
 | LLM Observability per-span billing             | Unexpected Datadog cost at scale                                                                       | Billed per LLM span (1 span per `messages.create()` call); at <100 analyses/day ≈ ~3,000 spans/month; monitor via LLM Observability → Cost view; test base64 image span size in dev                                                                                    |
-| dd-trace Anthropic plugin not in layer         | LLM Observability silently does nothing                                                                | Verify LLM spans appear after first deploy; check dd-trace version in layer; bump `Datadog-Node20-x` layer version if needed                                                                                                                                           |
+| dd-trace Anthropic plugin not activating       | LLM Observability silently does nothing                                                                | Three requirements: (1) `Datadog-Node20-x` layer v134+, (2) `DD_TRACE_ANTHROPIC_ENABLED=true`, (3) `@anthropic-ai/sdk` in `nodeModules` (not inlined by esbuild). All three are deployed and verified.                                                                 |
 
 ---
 
