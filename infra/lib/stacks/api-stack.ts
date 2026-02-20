@@ -166,7 +166,7 @@ export class ApiStack extends Stack {
       }
 
       // ── LLM Observability (Worker only — it's the only function that calls Claude) ──
-      workerFn.addEnvironment('DD_LLMOBS_ENABLED', '1');
+      workerFn.addEnvironment('DD_LLMOBS_ENABLED', 'true');
       workerFn.addEnvironment('DD_LLMOBS_ML_APP', 'landscape-architect');
     }
 
