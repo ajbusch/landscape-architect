@@ -23,6 +23,7 @@ export class ApiStack extends Stack {
   public readonly apiUrl: string;
   public readonly apiLambda: lambda.Function;
   public readonly workerLambda: lambda.Function;
+  public readonly originVerifySecret: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
@@ -36,6 +37,16 @@ export class ApiStack extends Stack {
     const table = dynamodb.Table.fromTableName(this, 'ImportedTable', tableName);
     const bucket = s3.Bucket.fromBucketName(this, 'ImportedBucket', bucketName);
     const secret = secretsmanager.Secret.fromSecretCompleteArn(this, 'ImportedSecret', secretArn);
+
+    // ── Origin-verify shared secret ──────────────────────────────
+    const originVerifySecret = new secretsmanager.Secret(this, 'OriginVerifySecret', {
+      description: 'Shared secret between CloudFront and API Gateway for origin verification',
+      generateSecretString: {
+        excludePunctuation: true,
+        passwordLength: 32,
+      },
+    });
+    this.originVerifySecret = originVerifySecret;
 
     // ── Explicit log groups with retention ──────────────────────────
     const apiLogGroup = new logs.LogGroup(this, 'ApiLogGroup', {
@@ -107,6 +118,7 @@ export class ApiStack extends Stack {
         BUCKET_NAME: bucketName,
         STAGE: props.stage,
         WORKER_FUNCTION_NAME: workerFn.functionName,
+        ORIGIN_VERIFY_SECRET: originVerifySecret.secretValue.unsafeUnwrap(),
         NODE_OPTIONS: '--enable-source-maps',
       },
     });
@@ -173,11 +185,7 @@ export class ApiStack extends Stack {
     const isProd = props.stage === 'prod';
 
     const apiCorsOrigins = isProd
-      ? [
-          'https://landscapearchitect.app',
-          'https://landscaper.cloud',
-          'https://d5hj1rpwk1mpl.cloudfront.net',
-        ]
+      ? ['https://landscaper.cloud', 'https://d5hj1rpwk1mpl.cloudfront.net']
       : [
           'https://dev.landscaper.cloud',
           'https://staging.landscaper.cloud',

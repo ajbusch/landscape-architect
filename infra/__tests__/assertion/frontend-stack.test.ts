@@ -2,7 +2,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, it } from 'vitest';
-import { App } from 'aws-cdk-lib';
+import { App, Stack } from 'aws-cdk-lib';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { FrontendStack } from '../../lib/stacks/frontend-stack.js';
 
@@ -149,6 +150,45 @@ describe('FrontendStack', () => {
         Match.objectLike({ Key: 'Project', Value: 'LandscapeArchitect' }),
         Match.objectLike({ Key: 'Stage', Value: 'dev' }),
       ]),
+    });
+  });
+});
+
+describe('FrontendStack with origin-verify secret', () => {
+  const app = new App();
+
+  const secretStack = new Stack(app, 'TestSecretStackFe', {
+    env: { account: '111111111111', region: 'us-east-1' },
+  });
+  const mockSecret = new secretsmanager.Secret(secretStack, 'MockOriginVerifySecret');
+
+  const stack = new FrontendStack(app, 'TestFrontendWithSecret', {
+    stage: 'dev',
+    apiUrl: 'https://abc123.execute-api.us-east-1.amazonaws.com/',
+    domainName: 'dev.landscaper.cloud',
+    hostedZoneId: 'Z1234567890ABC',
+    certificateArn: 'arn:aws:acm:us-east-1:111111111111:certificate/test-cert-id',
+    webAssetPath,
+    originVerifySecret: mockSecret,
+    env: { account: '111111111111', region: 'us-east-1' },
+  });
+  const template = Template.fromStack(stack);
+
+  it('adds X-Origin-Verify custom header to API origin', () => {
+    template.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        Origins: Match.arrayWith([
+          Match.objectLike({
+            DomainName: Match.stringLikeRegexp('execute-api'),
+            OriginCustomHeaders: Match.arrayWith([
+              Match.objectLike({
+                HeaderName: 'X-Origin-Verify',
+                HeaderValue: Match.anyValue(),
+              }),
+            ]),
+          }),
+        ]),
+      }),
     });
   });
 });

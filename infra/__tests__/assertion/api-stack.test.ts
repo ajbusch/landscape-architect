@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { App, Stack } from 'aws-cdk-lib';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Match, Template } from 'aws-cdk-lib/assertions';
@@ -120,6 +120,37 @@ describe('ApiStack', () => {
         AllowMethods: Match.arrayWith(['*']),
         AllowHeaders: Match.arrayWith(['*']),
       }),
+    });
+  });
+
+  describe('Origin-verify secret', () => {
+    it('creates an origin-verify secret', () => {
+      template.hasResourceProperties('AWS::SecretsManager::Secret', {
+        GenerateSecretString: {
+          ExcludePunctuation: true,
+          PasswordLength: 32,
+        },
+      });
+    });
+
+    it('passes ORIGIN_VERIFY_SECRET to API Lambda', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'index.lambdaHandler',
+        Environment: {
+          Variables: Match.objectLike({
+            ORIGIN_VERIFY_SECRET: Match.anyValue(),
+          }),
+        },
+      });
+    });
+
+    it('does not pass ORIGIN_VERIFY_SECRET to Worker Lambda', () => {
+      const workerFunctions = template.findResources('AWS::Lambda::Function', {
+        Properties: { MemorySize: 1024 },
+      });
+      const workerLogicalId = Object.keys(workerFunctions)[0];
+      const workerEnv = workerFunctions[workerLogicalId].Properties.Environment.Variables;
+      expect(workerEnv).not.toHaveProperty('ORIGIN_VERIFY_SECRET');
     });
   });
 
@@ -299,5 +330,32 @@ describe('ApiStack with Datadog Extension + Tracing', () => {
     if ('DD_LLMOBS_ENABLED' in apiEnvVars) {
       throw new Error('API Lambda should NOT have DD_LLMOBS_ENABLED set');
     }
+  });
+});
+
+describe('ApiStack (prod stage)', () => {
+  const app = new App();
+  const stack = new ApiStack(app, 'TestApiProd', {
+    stage: 'prod',
+    env: { account: '111111111111', region: 'us-east-1' },
+  });
+  const template = Template.fromStack(stack);
+
+  it('has CORS configured for prod origins', () => {
+    template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+      CorsConfiguration: Match.objectLike({
+        AllowOrigins: Match.arrayWith([
+          'https://landscaper.cloud',
+          'https://d5hj1rpwk1mpl.cloudfront.net',
+        ]),
+      }),
+    });
+  });
+
+  it('does not include landscapearchitect.app in prod CORS origins', () => {
+    const apis = template.findResources('AWS::ApiGatewayV2::Api');
+    const apiLogicalId = Object.keys(apis)[0];
+    const origins = apis[apiLogicalId].Properties.CorsConfiguration.AllowOrigins;
+    expect(origins).not.toContain('https://landscapearchitect.app');
   });
 });

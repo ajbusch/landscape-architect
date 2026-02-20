@@ -6,6 +6,7 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import type * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import type { Construct } from 'constructs';
 
 export interface FrontendStackProps extends StackProps {
@@ -16,6 +17,8 @@ export interface FrontendStackProps extends StackProps {
   certificateArn: string;
   /** Path to the built web assets directory. Defaults to ../apps/web/dist */
   webAssetPath?: string;
+  /** Shared secret for CloudFront → API Gateway origin verification */
+  originVerifySecret?: secretsmanager.ISecret;
 }
 
 export class FrontendStack extends Stack {
@@ -59,6 +62,11 @@ export class FrontendStack extends Stack {
             protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
             originPath: '',
             readTimeout: Duration.seconds(60),
+            ...(props.originVerifySecret && {
+              customHeaders: {
+                'X-Origin-Verify': props.originVerifySecret.secretValue.unsafeUnwrap(),
+              },
+            }),
           }),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,

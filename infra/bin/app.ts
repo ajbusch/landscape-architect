@@ -83,6 +83,7 @@ const frontendStack = new FrontendStack(app, `LandscapeArchitect-Frontend-${stag
   domainName: dnsStack.domainName,
   hostedZoneId: dnsShared.hostedZoneId,
   certificateArn: dnsStack.certificateArn,
+  originVerifySecret: apiStack.originVerifySecret,
   env,
 });
 frontendStack.addDependency(apiStack);
