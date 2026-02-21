@@ -1,9 +1,11 @@
-import Fastify, { type FastifyInstance, type FastifyBaseLogger } from 'fastify';
+import { STATUS_CODES } from 'node:http';
+import Fastify, { type FastifyInstance, type FastifyBaseLogger, type FastifyError } from 'fastify';
 import cors from '@fastify/cors';
 import { healthRoute } from './routes/health.js';
 import { plantsRoute } from './routes/plants.js';
 import { analysesRoute } from './routes/analyses.js';
 import { logger } from './lib/logger.js';
+import { sendError } from './lib/errors.js';
 
 const CORS_ORIGINS: Record<string, string[]> = {
   dev: ['https://dev.landscaper.cloud', 'http://localhost:5173'],
@@ -37,10 +39,20 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
     app.addHook('onRequest', async (request, reply) => {
       if (request.url === '/health') return;
       if (request.headers['x-origin-verify'] !== originVerifySecret) {
-        return reply.code(403).send({ error: 'Forbidden' });
+        return sendError(reply, 403, 'Forbidden');
       }
     });
   }
+
+  // Global error handler — catch-all for unhandled errors
+  app.setErrorHandler<FastifyError>((error, _request, reply) => {
+    const statusCode = error.statusCode ?? 500;
+    return reply.status(statusCode).send({
+      statusCode,
+      error: STATUS_CODES[statusCode] ?? 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred',
+    });
+  });
 
   // Routes
   await app.register(healthRoute);

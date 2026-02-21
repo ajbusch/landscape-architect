@@ -24,7 +24,9 @@ export class ApiError extends Error {
 
 async function extractErrorMessage(res: Response): Promise<string> {
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  return (body.error as string | undefined) ?? res.statusText;
+  return (
+    (body.message as string | undefined) ?? (body.error as string | undefined) ?? res.statusText
+  );
 }
 
 export interface SubmitAnalysisResult {

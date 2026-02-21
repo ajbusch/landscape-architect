@@ -7,6 +7,7 @@ import {
   type PlantSearchResponse,
 } from '@landscape-architect/shared';
 import { docClient, TABLE_NAME } from '../db.js';
+import { sendError, sendValidationError } from '../lib/errors.js';
 
 function parseZone(zone: string): number {
   const match = /^(\d+)([ab])$/.exec(zone);
@@ -45,9 +46,7 @@ export function plantsRoute(app: FastifyInstance): void {
     });
 
     if (!parseResult.success) {
-      return reply
-        .status(400)
-        .send({ error: 'Invalid query parameters', details: parseResult.error.issues });
+      return sendValidationError(reply, parseResult.error.issues);
     }
 
     const params = parseResult.data;
@@ -154,7 +153,7 @@ export function plantsRoute(app: FastifyInstance): void {
     );
 
     if (!result.Item) {
-      return reply.status(404).send({ error: 'Plant not found' });
+      return sendError(reply, 404, 'Plant not found');
     }
 
     const plant = PlantSchema.parse(result.Item);

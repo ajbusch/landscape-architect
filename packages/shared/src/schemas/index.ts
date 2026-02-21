@@ -45,3 +45,10 @@ export {
   type PlantSearchParams,
   type PlantSearchResponse,
 } from './plant.js';
+
+export {
+  ErrorResponseSchema,
+  ValidationErrorResponseSchema,
+  type ErrorResponse,
+  type ValidationErrorResponse,
+} from './error.js';
