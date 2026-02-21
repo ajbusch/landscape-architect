@@ -104,6 +104,22 @@ Synth: `cd infra && npx cdk synth`
 - API routes registered as Fastify plugins, all under `/api/v1/`
 - API client (`apps/web/src/services/api.ts`) validates all responses with shared Zod schemas
 
+## Commits and PRs
+
+Keep git commit messages and PR descriptions **short and plain-text**. This avoids long heredoc shell commands that trigger permission prompts.
+
+### Commit messages
+
+- **Subject line only** — one line, ≤72 characters, no body. Use the `-m "..."` flag with a simple double-quoted string.
+- Follow the existing `type(scope): description` convention (e.g., `feat(web): migrate to Places API`).
+- No bullet lists, no multi-line explanations, no special characters.
+
+### PR descriptions
+
+- Use `gh pr create --title "..." --body "..."` with a short inline body string (1-3 sentences).
+- Do **not** use heredocs (`<<EOF`). Keep the `--body` value on a single line.
+- If more detail is needed, add it as a PR comment after creation.
+
 ## Specs
 
 Detailed architecture and design docs live in `specs/`. Consult these when building features or making design decisions:
