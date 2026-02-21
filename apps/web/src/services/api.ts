@@ -1,11 +1,9 @@
 import {
-  ZoneResponseSchema,
   AnalysisResponseSchema,
   PlantSearchResponseSchema,
   PlantSchema,
 } from '@landscape-architect/shared';
 import type {
-  ZoneResponse,
   AnalysisResponse,
   PlantSearchResponse,
   Plant,
@@ -29,15 +27,6 @@ async function extractErrorMessage(res: Response): Promise<string> {
   return (body.error as string | undefined) ?? res.statusText;
 }
 
-export async function lookupZone(zip: string): Promise<ZoneResponse> {
-  const res = await fetch(`${BASE_URL}/zones/${encodeURIComponent(zip)}`);
-  if (!res.ok) {
-    throw new ApiError(res.status, await extractErrorMessage(res));
-  }
-  const data: unknown = await res.json();
-  return ZoneResponseSchema.parse(data);
-}
-
 export interface SubmitAnalysisResult {
   id: string;
   status: AnalysisStatus;
@@ -47,7 +36,12 @@ export interface SubmitAnalysisResult {
  * Submit an analysis request. Returns immediately with { id, status: "pending" }.
  * The caller should then poll via pollAnalysis().
  */
-export async function submitAnalysis(photo: File, zipCode: string): Promise<SubmitAnalysisResult> {
+export async function submitAnalysis(
+  photo: File,
+  latitude: number | null,
+  longitude: number | null,
+  locationName: string,
+): Promise<SubmitAnalysisResult> {
   // Step 1: Get a presigned S3 upload URL
   const contentType = photo.type || 'image/jpeg';
   const uploadRes = await fetch(`${BASE_URL}/analyses/upload-url`, {
@@ -85,7 +79,7 @@ export async function submitAnalysis(photo: File, zipCode: string): Promise<Subm
   const res = await fetch(`${BASE_URL}/analyses`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ photoKey: s3Key, zipCode }),
+    body: JSON.stringify({ photoKey: s3Key, latitude, longitude, locationName }),
   });
 
   if (!res.ok) {

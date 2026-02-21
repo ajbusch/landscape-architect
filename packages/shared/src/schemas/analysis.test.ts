@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   IdentifiedFeatureSchema,
   PlantRecommendationSchema,
+  AnalysisRequestSchema,
   AnalysisResultSchema,
   AnalysisResponseSchema,
   AiAnalysisOutputSchema,
@@ -84,6 +85,67 @@ describe('PlantRecommendationSchema', () => {
   });
 });
 
+describe('AnalysisRequestSchema', () => {
+  it('accepts valid request with coordinates', () => {
+    const result = AnalysisRequestSchema.safeParse({
+      photoKey: 'photos/anonymous/abc/original.jpg',
+      latitude: 35.23,
+      longitude: -80.84,
+      locationName: 'Charlotte, North Carolina, USA',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts null coordinates for fallback path', () => {
+    const result = AnalysisRequestSchema.safeParse({
+      photoKey: 'photos/anonymous/abc/original.jpg',
+      latitude: null,
+      longitude: null,
+      locationName: 'Charlotte, North Carolina',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects mixed null/non-null coordinates', () => {
+    const result = AnalysisRequestSchema.safeParse({
+      photoKey: 'photos/anonymous/abc/original.jpg',
+      latitude: 35.23,
+      longitude: null,
+      locationName: 'Charlotte, NC',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects latitude out of range', () => {
+    const result = AnalysisRequestSchema.safeParse({
+      photoKey: 'photos/anonymous/abc/original.jpg',
+      latitude: 91,
+      longitude: -80.84,
+      locationName: 'Charlotte, NC',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects empty locationName', () => {
+    const result = AnalysisRequestSchema.safeParse({
+      photoKey: 'photos/anonymous/abc/original.jpg',
+      latitude: 35.23,
+      longitude: -80.84,
+      locationName: '',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects missing photoKey', () => {
+    const result = AnalysisRequestSchema.safeParse({
+      latitude: 35.23,
+      longitude: -80.84,
+      locationName: 'Charlotte, NC',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('AnalysisResultSchema', () => {
   const validResult = {
     summary: 'A medium-sized backyard with a mature oak providing partial shade.',
@@ -116,11 +178,13 @@ describe('AnalysisResultSchema', () => {
 });
 
 describe('AnalysisResponseSchema', () => {
-  it('accepts a valid full response', () => {
+  it('accepts a valid full response with location fields', () => {
     const result = AnalysisResponseSchema.safeParse({
       id: '550e8400-e29b-41d4-a716-446655440099',
       photoUrl: 'https://s3.example.com/photos/abc.jpg',
-      address: { zipCode: '28202', zone: '7b' },
+      latitude: 35.23,
+      longitude: -80.84,
+      locationName: 'Charlotte, North Carolina, USA',
       result: {
         summary: 'A medium backyard with shade.',
         yardSize: 'medium',
@@ -135,11 +199,13 @@ describe('AnalysisResponseSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('allows optional userId for unauthenticated analysis', () => {
+  it('allows nullable coordinates for fallback path', () => {
     const result = AnalysisResponseSchema.safeParse({
       id: '550e8400-e29b-41d4-a716-446655440099',
       photoUrl: 'https://s3.example.com/photos/abc.jpg',
-      address: { zipCode: '28202', zone: '7b' },
+      latitude: null,
+      longitude: null,
+      locationName: 'Charlotte, North Carolina',
       result: {
         summary: 'A yard.',
         yardSize: 'small',
@@ -162,6 +228,10 @@ describe('AiAnalysisOutputSchema', () => {
     yardSize: 'medium',
     overallSunExposure: 'partial_shade',
     estimatedSoilType: 'loamy',
+    climate: {
+      usdaZone: '7b',
+      description: 'Humid subtropical with hot summers and mild winters.',
+    },
     isValidYardPhoto: true,
     features: [
       {
@@ -325,5 +395,45 @@ describe('AiAnalysisOutputSchema', () => {
       ],
     };
     expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(true);
+  });
+
+  it('requires climate field', () => {
+    const data = { ...validAiOutput } as Record<string, unknown>;
+    delete data.climate;
+    expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(false);
+  });
+
+  it('requires climate.description', () => {
+    const data = {
+      ...validAiOutput,
+      climate: { usdaZone: '7b' },
+    };
+    expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(false);
+  });
+
+  it('allows climate without usdaZone (international locations)', () => {
+    const data = {
+      ...validAiOutput,
+      climate: { description: 'Tropical monsoon climate.' },
+    };
+    expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(true);
+  });
+
+  it('rejects invalid usdaZone format', () => {
+    const data = {
+      ...validAiOutput,
+      climate: { usdaZone: 'Zone 7b', description: 'Humid subtropical.' },
+    };
+    expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(false);
+  });
+
+  it('accepts valid usdaZone formats', () => {
+    for (const zone of ['1a', '7b', '10a', '13b']) {
+      const data = {
+        ...validAiOutput,
+        climate: { usdaZone: zone, description: 'Test climate.' },
+      };
+      expect(AiAnalysisOutputSchema.safeParse(data).success).toBe(true);
+    }
   });
 });

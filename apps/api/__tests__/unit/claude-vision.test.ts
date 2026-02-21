@@ -32,6 +32,10 @@ const validAiResponse = {
   yardSize: 'medium',
   overallSunExposure: 'partial_shade',
   estimatedSoilType: 'loamy',
+  climate: {
+    usdaZone: '7b',
+    description: 'Humid subtropical with hot summers and mild winters.',
+  },
   isValidYardPhoto: true,
   features: [{ type: 'tree', label: 'Oak', confidence: 'high' }],
   recommendedPlantTypes: [
@@ -56,7 +60,13 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(validAiResponse) }],
     });
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -70,7 +80,7 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(validAiResponse) }],
     });
 
-    await analyzeYardPhoto('base64photo', 'image/png', '5a', 'USDA Zone 5a');
+    await analyzeYardPhoto('base64photo', 'image/png', 'Boston, Massachusetts, USA', 42.36, -71.06);
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -89,7 +99,7 @@ describe('analyzeYardPhoto', () => {
               },
               {
                 type: 'text',
-                text: expect.stringContaining('Zone 5a'),
+                text: expect.stringContaining('Boston, Massachusetts, USA'),
               },
             ],
           },
@@ -109,7 +119,13 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(validAiResponse) }],
     });
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(mockCreate).toHaveBeenCalledTimes(2);
     expect(result.ok).toBe(true);
@@ -125,7 +141,13 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(validAiResponse) }],
     });
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(mockCreate).toHaveBeenCalledTimes(2);
     expect(result.ok).toBe(true);
@@ -136,7 +158,13 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: 'still not json' }],
     });
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(mockCreate).toHaveBeenCalledTimes(2); // original + 1 retry
     expect(result.ok).toBe(false);
@@ -150,7 +178,13 @@ describe('analyzeYardPhoto', () => {
     timeoutError.name = 'AbortError';
     mockCreate.mockRejectedValueOnce(timeoutError);
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(mockCreate).toHaveBeenCalledTimes(1); // No retry on timeout
     expect(result.ok).toBe(false);
@@ -165,7 +199,13 @@ describe('analyzeYardPhoto', () => {
     const rateError = new Anthropic.APIError(429, {}, 'Rate limited', {} as unknown as Headers);
     mockCreate.mockRejectedValueOnce(rateError);
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(mockCreate).toHaveBeenCalledTimes(1); // No retry on rate limit
     expect(result.ok).toBe(false);
@@ -186,7 +226,13 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(invalidPhotoResponse) }],
     });
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -201,7 +247,13 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: fencedJson }],
     });
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(true);
@@ -216,7 +268,13 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: fencedJson }],
     });
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(true);
@@ -232,7 +290,13 @@ describe('analyzeYardPhoto', () => {
       content: [{ type: 'text', text: JSON.stringify(validAiResponse) }],
     });
 
-    const result = await analyzeYardPhoto('base64data', 'image/jpeg', '7b', 'USDA Zone 7b');
+    const result = await analyzeYardPhoto(
+      'base64data',
+      'image/jpeg',
+      'Charlotte, North Carolina, USA',
+      35.23,
+      -80.84,
+    );
 
     expect(result.ok).toBe(true);
   });

@@ -60,9 +60,9 @@ const mockMatchPlants = matchPlants as unknown as Mock;
 const baseEvent = {
   analysisId: 'test-analysis-id',
   photoKey: 'photos/anonymous/test-analysis-id/original.jpg',
-  zipCode: '28202',
-  zone: '7b',
-  zoneDescription: 'USDA Hardiness Zone 7b (5°F to 10°F)',
+  latitude: 35.23,
+  longitude: -80.84,
+  locationName: 'Charlotte, North Carolina, USA',
 };
 
 const fakeContext: Context = {
@@ -90,6 +90,10 @@ const validAiResult = {
     yardSize: 'medium' as const,
     overallSunExposure: 'partial_shade' as const,
     estimatedSoilType: 'loamy' as const,
+    climate: {
+      usdaZone: '7b',
+      description: 'Humid subtropical with hot summers and mild winters.',
+    },
     isValidYardPhoto: true,
     features: [{ type: 'tree' as const, label: 'Oak', confidence: 'high' as const }],
     recommendedPlantTypes: [
@@ -170,8 +174,9 @@ describe('worker handler', () => {
       expect(mockAnalyzeYardPhoto).toHaveBeenCalledWith(
         resizedBuffer.toString('base64'),
         'image/jpeg',
-        '7b',
-        baseEvent.zoneDescription,
+        'Charlotte, North Carolina, USA',
+        35.23,
+        -80.84,
       );
       expect(mockMatchPlants).toHaveBeenCalledWith(validAiResult.data, '7b');
       expect(mockGetPresignedUrl).toHaveBeenCalledWith(baseEvent.photoKey);
@@ -201,8 +206,32 @@ describe('worker handler', () => {
       const result = values[':result'] as Record<string, unknown>;
       expect(result.id).toBe('test-analysis-id');
       expect(result.photoUrl).toBe('https://s3.example.com/signed');
-      expect(result.address).toEqual({ zipCode: '28202', zone: '7b' });
+      expect(result.latitude).toBe(35.23);
+      expect(result.longitude).toBe(-80.84);
+      expect(result.locationName).toBe('Charlotte, North Carolina, USA');
       expect(result.tier).toBe('free');
+    });
+
+    it('passes null zone to matchPlants when Claude omits usdaZone', async () => {
+      setupHappyPath();
+      mockAnalyzeYardPhoto.mockResolvedValue({
+        ok: true,
+        data: {
+          ...validAiResult.data,
+          climate: {
+            description: 'Tropical climate with year-round warmth.',
+          },
+        },
+      });
+
+      await handler(baseEvent, fakeContext);
+
+      expect(mockMatchPlants).toHaveBeenCalledWith(
+        expect.objectContaining({
+          climate: { description: 'Tropical climate with year-round warmth.' },
+        }),
+        null,
+      );
     });
   });
 
@@ -229,7 +258,8 @@ describe('worker handler', () => {
         convertedBuffer.toString('base64'),
         'image/jpeg',
         expect.any(String),
-        expect.any(String),
+        expect.any(Number),
+        expect.any(Number),
       );
     });
 
@@ -277,7 +307,8 @@ describe('worker handler', () => {
         expect.any(String),
         'image/png',
         expect.any(String),
-        expect.any(String),
+        expect.any(Number),
+        expect.any(Number),
       );
     });
   });

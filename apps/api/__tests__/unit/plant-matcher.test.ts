@@ -66,6 +66,10 @@ const aiOutput: AiAnalysisOutput = {
   yardSize: 'medium',
   overallSunExposure: 'partial_shade',
   estimatedSoilType: 'loamy',
+  climate: {
+    usdaZone: '7b',
+    description: 'Humid subtropical with hot summers and mild winters.',
+  },
   isValidYardPhoto: true,
   features: [],
   recommendedPlantTypes: [

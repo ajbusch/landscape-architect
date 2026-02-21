@@ -20,7 +20,7 @@ export function _resetClient(): void {
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-20250514';
 const CLAUDE_TIMEOUT = 25_000; // 25 seconds (leaves headroom for S3 download + API Gateway 30s limit)
 
-const SYSTEM_PROMPT = `You are an expert landscape architect and horticulturist analyzing a homeowner's yard photo. You provide actionable, specific analysis with plant recommendations tailored to the user's USDA hardiness zone.
+const SYSTEM_PROMPT = `You are an expert landscape architect and horticulturist analyzing a homeowner's yard photo. You provide actionable, specific analysis with plant recommendations tailored to the user's local climate and growing conditions.
 
 Respond ONLY with valid JSON matching the schema below. No markdown, no preamble, no explanation outside the JSON.
 
@@ -29,6 +29,10 @@ Respond ONLY with valid JSON matching the schema below. No markdown, no preamble
   "yardSize": "small | medium | large",
   "overallSunExposure": "full_sun | partial_shade | full_shade",
   "estimatedSoilType": "clay | sandy | loamy | silty | rocky | unknown",
+  "climate": {
+    "usdaZone": "USDA zone as number + letter, e.g., '7b', '10a'. Omit if uncertain or not applicable.",
+    "description": "1-2 sentence description of the local climate, precipitation, and growing conditions"
+  },
   "features": [
     {
       "type": "tree | shrub | flower | grass | patio | walkway | fence | wall | deck | water_feature | slope | flat_area | garden_bed | other",
@@ -60,12 +64,25 @@ Important rules:
 - If the photo does not show a yard or outdoor space, set isValidYardPhoto to false and provide a reason. Leave features and recommendedPlantTypes as empty arrays.
 - Identify 3-8 visible features with confidence levels.
 - Recommend 5-8 plant types across the categories (quick_win, foundation_plant, seasonal_color, problem_solver). Include at least one from each category.
-- Consider the user's USDA zone when recommending — only suggest plants that thrive in their zone.
+- Consider the user's location and local climate when recommending. Determine the appropriate hardiness zone, growing season, precipitation patterns, and other climate factors based on the location provided. Only suggest plants that thrive in these conditions.
+- Always provide a climate assessment with at least a description. Include a USDA hardiness zone estimate when possible.
+- Format the USDA zone as a number (1-13) followed by a lowercase letter (a or b), e.g., "7b", "10a". Do not include "Zone" or other prefixes.
 - Base sun exposure assessment on visible shadows, tree canopy, building orientation, and time-of-day cues.
 - Be specific in your reasons — reference what you see in the photo.`;
 
-function buildUserMessage(zone: string, zoneDescription: string): string {
-  return `Analyze this yard photo. The homeowner is in USDA Hardiness Zone ${zone} (${zoneDescription}).
+function formatCoordinates(lat: number | null, lng: number | null): string {
+  if (lat === null || lng === null) return '';
+  const latStr = `${String(Math.abs(lat))}°${lat >= 0 ? 'N' : 'S'}`;
+  const lngStr = `${String(Math.abs(lng))}°${lng >= 0 ? 'E' : 'W'}`;
+  return ` (${latStr}, ${lngStr})`;
+}
+
+function buildUserMessage(
+  locationName: string,
+  latitude: number | null,
+  longitude: number | null,
+): string {
+  return `Analyze this yard photo. The homeowner's yard is in ${locationName}${formatCoordinates(latitude, longitude)}.
 
 Provide your analysis as JSON matching the schema in your instructions.`;
 }
@@ -86,11 +103,12 @@ export type ClaudeVisionResult =
 export async function analyzeYardPhoto(
   base64Photo: string,
   mediaType: 'image/jpeg' | 'image/png',
-  zone: string,
-  zoneDescription: string,
+  locationName: string,
+  latitude: number | null,
+  longitude: number | null,
 ): Promise<ClaudeVisionResult> {
   const client = await getClient();
-  const userText = buildUserMessage(zone, zoneDescription);
+  const userText = buildUserMessage(locationName, latitude, longitude);
 
   const callClaude = async (): Promise<ClaudeVisionResult> => {
     try {

@@ -14,7 +14,6 @@ vi.mock('react-router', async () => {
 });
 
 vi.mock('@/services/api', () => ({
-  lookupZone: vi.fn(),
   submitAnalysis: vi.fn(),
   pollAnalysis: vi.fn(),
   ApiError: class ApiError extends Error {
@@ -27,7 +26,7 @@ vi.mock('@/services/api', () => ({
   },
 }));
 
-import { lookupZone, submitAnalysis, pollAnalysis, ApiError } from '@/services/api';
+import { submitAnalysis, pollAnalysis, ApiError } from '@/services/api';
 
 function createTestFile(name = 'yard.jpg', type = 'image/jpeg', sizeKB = 100): File {
   const bytes = new Uint8Array(sizeKB * 1024);
@@ -46,13 +45,22 @@ function renderAnalyzePage(): ReturnType<typeof render> {
   return render(<RouterProvider router={router} />);
 }
 
+/** Type a location and blur to trigger fallback selection. */
+async function enterLocation(
+  user: ReturnType<typeof userEvent.setup>,
+  value = 'Charlotte, North Carolina',
+): Promise<void> {
+  const input = screen.getByLabelText('Location');
+  await user.type(input, value);
+  fireEvent.blur(input);
+}
+
 describe('AnalyzePage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     mockNavigate.mockReset();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     URL.createObjectURL = vi.fn(() => 'blob:preview');
-    (lookupZone as Mock).mockResolvedValue({ zone: '7b', zipCode: '28202' });
     (submitAnalysis as Mock).mockResolvedValue({ id: 'analysis-123', status: 'pending' });
     (pollAnalysis as Mock).mockResolvedValue({
       id: 'analysis-123',
@@ -70,7 +78,7 @@ describe('AnalyzePage', () => {
     renderAnalyzePage();
     expect(screen.getByText('Analyze Your Yard')).toBeInTheDocument();
     expect(screen.getByText('Yard Photo')).toBeInTheDocument();
-    expect(screen.getByLabelText('ZIP Code')).toBeInTheDocument();
+    expect(screen.getByLabelText('Location')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Analyze My Yard' })).toBeDisabled();
   });
 
@@ -147,64 +155,22 @@ describe('AnalyzePage', () => {
     });
   });
 
-  describe('ZIP code input', () => {
-    it('calls zone lookup on valid ZIP and shows resolved zone', async () => {
+  describe('Location input', () => {
+    it('shows confirmed location after typing and blurring', async () => {
       vi.useRealTimers();
       const user = userEvent.setup();
       renderAnalyzePage();
 
-      await user.type(screen.getByLabelText('ZIP Code'), '28202');
+      await enterLocation(user);
 
       await waitFor(() => {
-        expect(lookupZone).toHaveBeenCalledWith('28202');
-      });
-      await waitFor(() => {
-        expect(screen.getByText('Zone 7b')).toBeInTheDocument();
-      });
-    });
-
-    it('shows validation error for invalid ZIP', async () => {
-      vi.useRealTimers();
-      const user = userEvent.setup();
-      renderAnalyzePage();
-
-      // Type 5+ digit-like chars that aren't a valid ZIP pattern
-      await user.type(screen.getByLabelText('ZIP Code'), '1234-');
-
-      await waitFor(() => {
-        expect(screen.getByText('Enter a valid 5-digit ZIP code.')).toBeInTheDocument();
-      });
-    });
-
-    it('shows error when zone lookup returns 404', async () => {
-      (lookupZone as Mock).mockRejectedValue(new ApiError(404, 'Not found'));
-      vi.useRealTimers();
-      const user = userEvent.setup();
-      renderAnalyzePage();
-
-      await user.type(screen.getByLabelText('ZIP Code'), '00000');
-
-      await waitFor(() => {
-        expect(screen.getByText('No zone data found for this ZIP code.')).toBeInTheDocument();
-      });
-    });
-
-    it('shows generic error when zone lookup fails', async () => {
-      (lookupZone as Mock).mockRejectedValue(new Error('Network error'));
-      vi.useRealTimers();
-      const user = userEvent.setup();
-      renderAnalyzePage();
-
-      await user.type(screen.getByLabelText('ZIP Code'), '28202');
-
-      await waitFor(() => {
-        expect(screen.getByText('Could not look up zone. Try again.')).toBeInTheDocument();
+        expect(screen.getByText('Charlotte, North Carolina')).toBeInTheDocument();
       });
     });
   });
 
   describe('Analyze button', () => {
-    it('is disabled until photo and valid ZIP with zone are provided', async () => {
+    it('is disabled until photo and location are provided', async () => {
       vi.useRealTimers();
       const user = userEvent.setup();
       renderAnalyzePage();
@@ -216,12 +182,11 @@ describe('AnalyzePage', () => {
       uploadFile(createTestFile());
       expect(button).toBeDisabled();
 
-      // Add valid ZIP — enabled after zone resolves
-      await user.type(screen.getByLabelText('ZIP Code'), '28202');
+      // Add location — enabled after blur triggers selection
+      await enterLocation(user);
       await waitFor(() => {
-        expect(screen.getByText('Zone 7b')).toBeInTheDocument();
+        expect(button).toBeEnabled();
       });
-      expect(button).toBeEnabled();
     });
 
     it('submits analysis and navigates on complete', async () => {
@@ -230,15 +195,20 @@ describe('AnalyzePage', () => {
       renderAnalyzePage();
 
       uploadFile(createTestFile());
-      await user.type(screen.getByLabelText('ZIP Code'), '28202');
+      await enterLocation(user);
       await waitFor(() => {
-        expect(screen.getByText('Zone 7b')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Analyze My Yard' })).toBeEnabled();
       });
 
       await user.click(screen.getByRole('button', { name: 'Analyze My Yard' }));
 
       await waitFor(() => {
-        expect(submitAnalysis).toHaveBeenCalledWith(expect.any(File), '28202');
+        expect(submitAnalysis).toHaveBeenCalledWith(
+          expect.any(File),
+          null,
+          null,
+          'Charlotte, North Carolina',
+        );
       });
 
       // After submit, polling kicks in and finds 'complete', navigates
@@ -250,21 +220,26 @@ describe('AnalyzePage', () => {
       );
     });
 
-    it('submits analysis when Enter is pressed in ZIP code field', async () => {
+    it('submits analysis when Enter is pressed in location field', async () => {
       vi.useRealTimers();
       const user = userEvent.setup();
       renderAnalyzePage();
 
       uploadFile(createTestFile());
-      await user.type(screen.getByLabelText('ZIP Code'), '28202');
+      await enterLocation(user);
       await waitFor(() => {
-        expect(screen.getByText('Zone 7b')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Analyze My Yard' })).toBeEnabled();
       });
 
-      await user.type(screen.getByLabelText('ZIP Code'), '{Enter}');
+      await user.type(screen.getByLabelText('Location'), '{Enter}');
 
       await waitFor(() => {
-        expect(submitAnalysis).toHaveBeenCalledWith(expect.any(File), '28202');
+        expect(submitAnalysis).toHaveBeenCalledWith(
+          expect.any(File),
+          null,
+          null,
+          'Charlotte, North Carolina',
+        );
       });
 
       await waitFor(
@@ -280,16 +255,16 @@ describe('AnalyzePage', () => {
       const user = userEvent.setup();
       renderAnalyzePage();
 
-      // Only ZIP code, no photo
-      await user.type(screen.getByLabelText('ZIP Code'), '28202');
+      // Only location, no photo
+      await enterLocation(user);
       await waitFor(() => {
-        expect(screen.getByText('Zone 7b')).toBeInTheDocument();
+        expect(screen.getByText('Charlotte, North Carolina')).toBeInTheDocument();
       });
 
       // Clear any calls that may have leaked from prior async tests
       (submitAnalysis as Mock).mockClear();
 
-      await user.type(screen.getByLabelText('ZIP Code'), '{Enter}');
+      await user.type(screen.getByLabelText('Location'), '{Enter}');
 
       // handleSubmit guards on !photo, so submitAnalysis should not be called
       expect(submitAnalysis).not.toHaveBeenCalled();
@@ -306,9 +281,9 @@ describe('AnalyzePage', () => {
       renderAnalyzePage();
 
       uploadFile(createTestFile());
-      await user.type(screen.getByLabelText('ZIP Code'), '28202');
+      await enterLocation(user);
       await waitFor(() => {
-        expect(screen.getByText('Zone 7b')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Analyze My Yard' })).toBeEnabled();
       });
 
       await user.click(screen.getByRole('button', { name: 'Analyze My Yard' }));
@@ -327,9 +302,9 @@ describe('AnalyzePage', () => {
       renderAnalyzePage();
 
       uploadFile(createTestFile());
-      await user.type(screen.getByLabelText('ZIP Code'), '28202');
+      await enterLocation(user);
       await waitFor(() => {
-        expect(screen.getByText('Zone 7b')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Analyze My Yard' })).toBeEnabled();
       });
 
       await user.click(screen.getByRole('button', { name: 'Analyze My Yard' }));

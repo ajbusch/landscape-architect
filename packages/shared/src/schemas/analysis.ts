@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { USDAZoneSchema } from './zone.js';
+import { LocationInputSchema } from './location.js';
 
 /**
  * Confidence level for AI-identified features.
@@ -89,6 +90,24 @@ export const PlantRecommendationSchema = z.object({
 export type PlantRecommendation = z.infer<typeof PlantRecommendationSchema>;
 
 /**
+ * Request body for POST /api/v1/analyses — compose with LocationInputSchema.
+ * Lat/lng must both be present or both be null (mixed state → 400).
+ */
+export const AnalysisRequestSchema = z
+  .object({
+    photoKey: z.string().min(1),
+  })
+  .extend(LocationInputSchema.shape)
+  .refine(
+    (data) =>
+      (data.latitude === null && data.longitude === null) ||
+      (data.latitude !== null && data.longitude !== null),
+    { message: 'latitude and longitude must both be present or both be null' },
+  );
+
+export type AnalysisRequest = z.infer<typeof AnalysisRequestSchema>;
+
+/**
  * The complete AI analysis result.
  */
 export const AnalysisResultSchema = z.object({
@@ -109,10 +128,9 @@ export const AnalysisResponseSchema = z.object({
   id: z.uuid(),
   userId: z.uuid().optional(),
   photoUrl: z.url(),
-  address: z.object({
-    zipCode: z.string(),
-    zone: USDAZoneSchema,
-  }),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  locationName: z.string(),
   result: AnalysisResultSchema,
   tier: z.enum(['free', 'premium']),
   createdAt: z.iso.datetime(),
@@ -150,6 +168,13 @@ export const AiAnalysisOutputSchema = z.object({
   yardSize: z.enum(['small', 'medium', 'large']),
   overallSunExposure: SunExposureSchema,
   estimatedSoilType: z.enum(['clay', 'sandy', 'loamy', 'silty', 'rocky', 'unknown']),
+  climate: z.object({
+    usdaZone: z
+      .string()
+      .regex(/^(1[0-3]|[1-9])[ab]$/)
+      .optional(),
+    description: z.string().min(1).max(500),
+  }),
   features: z.array(
     z.object({
       type: FeatureTypeSchema,

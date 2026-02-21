@@ -23,12 +23,12 @@ function isZoneInRange(zone: string, min: string, max: string): boolean {
 }
 
 /**
- * Query DynamoDB for plants matching type + light, filtered by zone.
+ * Query DynamoDB for plants matching type + light, optionally filtered by zone.
  */
 async function findPlantsByTypeAndLight(
   type: string,
   light: string,
-  zone: string,
+  zone: string | null,
 ): Promise<Plant[]> {
   const result = await docClient.send(
     new QueryCommand({
@@ -45,11 +45,11 @@ async function findPlantsByTypeAndLight(
     })
     .filter((p): p is Plant => p !== null);
 
-  // Filter by light and zone
+  // Filter by light, and by zone if available
   return plants.filter(
     (p) =>
       p.light.includes(light as Plant['light'][number]) &&
-      isZoneInRange(zone, p.zoneMin, p.zoneMax),
+      (zone === null || isZoneInRange(zone, p.zoneMin, p.zoneMax)),
   );
 }
 
@@ -106,7 +106,7 @@ function plantToRecommendation(
  */
 export async function matchPlants(
   aiOutput: AiAnalysisOutput,
-  zone: string,
+  zone: string | null,
 ): Promise<PlantRecommendation[]> {
   const recommendations: PlantRecommendation[] = [];
   const usedPlantIds = new Set<string>();
@@ -142,8 +142,8 @@ export async function matchPlants(
     }
   }
 
-  // If no recommendations at all, fall back to popular plants for the zone
-  if (recommendations.length === 0) {
+  // If no recommendations at all and zone is available, fall back to popular plants for the zone
+  if (recommendations.length === 0 && zone !== null) {
     const fallback = await getPopularPlantsForZone(zone);
     const topFallback = fallback.slice(0, 5);
     for (const plant of topFallback) {

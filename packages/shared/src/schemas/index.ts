@@ -9,6 +9,8 @@ export {
   type ZoneResponse,
 } from './zone.js';
 
+export { LocationInputSchema, type LocationInput } from './location.js';
+
 export {
   ConfidenceLevelSchema,
   SunExposureSchema,
@@ -17,6 +19,7 @@ export {
   CostRangeSchema,
   RecommendationCategorySchema,
   PlantRecommendationSchema,
+  AnalysisRequestSchema,
   AnalysisResultSchema,
   AnalysisResponseSchema,
   FeatureTypeSchema,
@@ -24,6 +27,7 @@ export {
   AiAnalysisOutputSchema,
   type IdentifiedFeature,
   type PlantRecommendation,
+  type AnalysisRequest,
   type AnalysisResult,
   type AnalysisResponse,
   type AiAnalysisOutput,

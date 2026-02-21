@@ -3,9 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import type { AnalysisResponse } from '@landscape-architect/shared';
-import { AnalysisResponseSchema } from '@landscape-architect/shared';
+import { AnalysisRequestSchema, AnalysisResponseSchema } from '@landscape-architect/shared';
 import { docClient, TABLE_NAME } from '../db.js';
-import { getZoneByZip } from '../services/zone-lookup.js';
 import { getPhotoUploadUrl, getPhotoPresignedUrl } from '../services/photo.js';
 
 const SEVEN_DAYS_S = 7 * 24 * 60 * 60;
@@ -45,30 +44,30 @@ export function analysesRoute(app: FastifyInstance): void {
 
   /**
    * POST /api/v1/analyses — submit a new yard analysis (async).
-   * Accepts JSON { photoKey, zipCode }, creates a pending record,
-   * async-invokes the Worker Lambda, and returns 202 immediately.
+   * Accepts JSON { photoKey, latitude, longitude, locationName },
+   * creates a pending record, async-invokes the Worker Lambda, and returns 202 immediately.
    */
-  app.post<{
-    Body: { photoKey: string; zipCode: string };
-  }>('/api/v1/analyses', async (request, reply) => {
-    const { photoKey, zipCode } = request.body;
-
-    if (!photoKey) {
-      return await reply.status(400).send({ error: 'photoKey is required' });
-    }
-    if (!zipCode) {
-      return await reply.status(400).send({ error: 'zipCode is required' });
+  app.post('/api/v1/analyses', async (request, reply) => {
+    // ── 1. Validate input ─────────────────────────────────────────────
+    const parsed = AnalysisRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return await reply.status(400).send({
+        error: 'Invalid input',
+        details: parsed.error.issues,
+      });
     }
 
-    // ── 1. Resolve ZIP to zone ────────────────────────────────────────
-    const zoneData = getZoneByZip(zipCode);
-    if (!zoneData) {
-      return await reply.status(404).send({ error: 'ZIP code not found' });
-    }
+    const { photoKey, locationName } = parsed.data;
+
+    // Round lat/lng to 2 decimal places (~1.1km) to reduce PII exposure
+    const latitude =
+      parsed.data.latitude !== null ? Math.round(parsed.data.latitude * 100) / 100 : null;
+    const longitude =
+      parsed.data.longitude !== null ? Math.round(parsed.data.longitude * 100) / 100 : null;
 
     // ── 2. Generate analysisId ────────────────────────────────────────
     const analysisId = randomUUID();
-    request.log.info({ analysisId, zipCode, zone: zoneData.zone }, 'Analysis requested');
+    request.log.info({ analysisId, locationName, latitude, longitude }, 'Analysis requested');
 
     // ── 3. Write pending DynamoDB record ──────────────────────────────
     const now = new Date();
@@ -83,8 +82,9 @@ export function analysesRoute(app: FastifyInstance): void {
           id: analysisId,
           status: 'pending',
           photoKey,
-          zipCode,
-          zone: zoneData.zone,
+          latitude,
+          longitude,
+          locationName,
           createdAt: now.toISOString(),
           updatedAt: now.toISOString(),
           ttl,
@@ -102,9 +102,9 @@ export function analysesRoute(app: FastifyInstance): void {
             JSON.stringify({
               analysisId,
               photoKey,
-              zipCode,
-              zone: zoneData.zone,
-              zoneDescription: zoneData.description,
+              latitude,
+              longitude,
+              locationName,
             }),
           ),
         }),
@@ -194,6 +194,20 @@ export function analysesRoute(app: FastifyInstance): void {
       const validated = AnalysisResponseSchema.safeParse(storedResult);
       if (validated.success) {
         return await reply.send({ id, status, createdAt, result: validated.data });
+      }
+
+      // Legacy records may have address.zipCode/zone instead of location fields.
+      // Try enriching with defaults so schema validates.
+      if (!storedResult.locationName && (storedResult as Record<string, unknown>).address) {
+        storedResult.locationName = 'Unknown location';
+        storedResult.latitude = null;
+        storedResult.longitude = null;
+        delete (storedResult as Record<string, unknown>).address;
+
+        const retryValidated = AnalysisResponseSchema.safeParse(storedResult);
+        if (retryValidated.success) {
+          return await reply.send({ id, status, createdAt, result: retryValidated.data });
+        }
       }
 
       request.log.error('Stored analysis failed schema validation');
