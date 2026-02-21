@@ -1,5 +1,6 @@
 import { Duration, RemovalPolicy, Stack, type StackProps, Tags } from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 
@@ -19,12 +20,19 @@ export class CloudTrailStack extends Stack {
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
+    const trailLogGroup = new logs.LogGroup(this, 'TrailLogGroup', {
+      retention: logs.RetentionDays.ONE_YEAR,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
     new cloudtrail.Trail(this, 'Trail', {
       bucket: trailBucket,
       isMultiRegionTrail: true,
       includeGlobalServiceEvents: true,
       enableFileValidation: true,
       managementEvents: cloudtrail.ReadWriteType.ALL,
+      sendToCloudWatchLogs: true,
+      cloudWatchLogGroup: trailLogGroup,
     });
 
     Tags.of(this).add('Project', 'LandscapeArchitect');

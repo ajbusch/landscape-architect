@@ -47,6 +47,22 @@ describe('CloudTrailStack', () => {
     });
   });
 
+  it('creates a CloudWatch log group', () => {
+    template.resourceCountIs('AWS::Logs::LogGroup', 1);
+  });
+
+  it('sets 365-day retention on the log group', () => {
+    template.hasResourceProperties('AWS::Logs::LogGroup', {
+      RetentionInDays: 365,
+    });
+  });
+
+  it('sends trail logs to CloudWatch', () => {
+    template.hasResourceProperties('AWS::CloudTrail::Trail', {
+      CloudWatchLogsLogGroupArn: Match.anyValue(),
+    });
+  });
+
   it('tags resources with project and stage', () => {
     template.hasResourceProperties('AWS::CloudTrail::Trail', {
       Tags: Match.arrayWith([
