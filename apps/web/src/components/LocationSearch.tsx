@@ -17,25 +17,33 @@ interface LocationSearchProps {
   onSubmit?: () => void;
 }
 
-function isGooglePlacesLoaded(): boolean {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- google is only defined after script loads
-  return typeof google !== 'undefined' && google.maps?.places !== undefined;
-}
-
-function loadGooglePlaces(apiKey: string): Promise<void> {
+function loadGoogleMaps(apiKey: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (isGooglePlacesLoaded()) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- google is only defined after script loads
+    if (typeof google !== 'undefined' && google.maps !== undefined) {
       resolve();
       return;
     }
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src*="maps.googleapis.com"]',
+    );
+    if (existing) {
+      existing.addEventListener('load', () => {
+        resolve();
+      });
+      existing.addEventListener('error', () => {
+        reject(new Error('Failed to load Google Maps'));
+      });
+      return;
+    }
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
     script.async = true;
     script.onload = (): void => {
       resolve();
     };
     script.onerror = (): void => {
-      reject(new Error('Failed to load Google Places'));
+      reject(new Error('Failed to load Google Maps'));
     };
     document.head.appendChild(script);
   });
@@ -47,12 +55,16 @@ export function LocationSearch({
   disabled,
   onSubmit,
 }: LocationSearchProps): React.JSX.Element {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pacRef = useRef<google.maps.places.PlaceAutocompleteElement | null>(null);
   const [placesAvailable, setPlacesAvailable] = useState<boolean | null>(null);
+  const [resetKey, setResetKey] = useState(0);
+
+  // Fallback mode state
+  const fallbackInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState('');
 
-  // Load Google Places on mount
+  // Load Google Maps + Places library on mount
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_PLACES_API_KEY;
     if (!apiKey) {
@@ -60,7 +72,8 @@ export function LocationSearch({
       return;
     }
 
-    loadGooglePlaces(apiKey)
+    loadGoogleMaps(apiKey)
+      .then(() => google.maps.importLibrary('places'))
       .then(() => {
         setPlacesAvailable(true);
       })
@@ -69,42 +82,66 @@ export function LocationSearch({
       });
   }, []);
 
-  // Attach autocomplete once Places is loaded and input is mounted
-  useEffect(() => {
-    if (!placesAvailable || !inputRef.current || autocompleteRef.current) return;
+  // Store latest onLocationChange in a ref to avoid re-creating the element on callback changes
+  const onLocationChangeRef = useRef(onLocationChange);
+  onLocationChangeRef.current = onLocationChange;
 
-    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+  // Create and mount PlaceAutocompleteElement
+  useEffect(() => {
+    if (!placesAvailable || !containerRef.current) return;
+
+    // Clean up previous element
+    if (pacRef.current && containerRef.current.contains(pacRef.current)) {
+      containerRef.current.removeChild(pacRef.current);
+    }
+    pacRef.current = null;
+
+    const pac = new google.maps.places.PlaceAutocompleteElement({
       types: ['(regions)'],
     });
 
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (!place.geometry?.location) {
-        // User pressed Enter without selecting — treat as fallback
-        return;
-      }
+    pac.addEventListener('gmp-select', ((
+      event: google.maps.places.PlaceAutocompletePlaceSelectEvent,
+    ) => {
+      const { place } = event;
 
-      const lat = place.geometry.location.lat();
-      const lng = place.geometry.location.lng();
-      const name = place.formatted_address ?? place.name ?? '';
+      void place
+        .fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] })
+        .then(({ place: fetched }) => {
+          const loc = fetched.location;
+          let lat: number | null = null;
+          let lng: number | null = null;
+          if (loc) {
+            lat = 'lat' in loc && typeof loc.lat === 'function' ? loc.lat() : null;
+            lng = 'lng' in loc && typeof loc.lng === 'function' ? loc.lng() : null;
+          }
+          const name = fetched.formattedAddress ?? fetched.displayName ?? '';
 
-      if (name) {
-        onLocationChange({
-          latitude: lat,
-          longitude: lng,
-          locationName: name,
+          if (name) {
+            onLocationChangeRef.current({
+              latitude: lat,
+              longitude: lng,
+              locationName: name,
+            });
+          }
         });
-        setInputValue(name);
+    }) as EventListener);
+
+    containerRef.current.appendChild(pac);
+    pacRef.current = pac;
+
+    return (): void => {
+      if (pacRef.current?.parentElement) {
+        pacRef.current.parentElement.removeChild(pacRef.current);
       }
-    });
+      pacRef.current = null;
+    };
+  }, [placesAvailable, resetKey]);
 
-    autocompleteRef.current = autocomplete;
-  }, [placesAvailable, onLocationChange]);
-
+  // Fallback handlers (same as original)
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setInputValue(e.target.value);
-      // Clear selected location when user types
       if (location) {
         onLocationChange(null);
       }
@@ -113,7 +150,6 @@ export function LocationSearch({
   );
 
   const handleBlur = useCallback(() => {
-    // If user typed something but didn't select from Places dropdown, use fallback
     const trimmed = inputValue.trim();
     if (trimmed && !location) {
       onLocationChange({
@@ -128,7 +164,6 @@ export function LocationSearch({
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        // If no location selected yet, use fallback with typed text
         const trimmed = inputValue.trim();
         if (!location && trimmed) {
           onLocationChange({
@@ -145,45 +180,88 @@ export function LocationSearch({
 
   const handleClear = useCallback(() => {
     onLocationChange(null);
-    setInputValue('');
-    inputRef.current?.focus();
-  }, [onLocationChange]);
+    if (placesAvailable) {
+      // Re-create the PlaceAutocompleteElement (no official clear API)
+      setResetKey((k) => k + 1);
+    } else {
+      setInputValue('');
+      fallbackInputRef.current?.focus();
+    }
+  }, [onLocationChange, placesAvailable]);
 
   const showConfirmed = location !== null;
 
   return (
     <div className="space-y-2">
       <Label htmlFor="location-search">Location</Label>
-      <div className="relative">
-        <Input
-          ref={inputRef}
-          id="location-search"
-          type="text"
-          placeholder="e.g. Charlotte, North Carolina"
-          value={inputValue}
-          onChange={handleInputChange}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          aria-describedby={showConfirmed ? 'location-confirmed' : undefined}
-          className="pr-10"
-        />
-        {placesAvailable === null && (
-          <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-        )}
-        {showConfirmed && !disabled && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="absolute right-1 top-1/2 -translate-y-1/2"
-            onClick={handleClear}
-            aria-label="Clear location"
-          >
-            <X className="size-4" />
-          </Button>
-        )}
-      </div>
+
+      {/* Loading state */}
+      {placesAvailable === null && (
+        <div className="relative">
+          <div className="border-input h-9 w-full rounded-md border bg-transparent px-3 py-1">
+            <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+          </div>
+        </div>
+      )}
+
+      {/* Places mode */}
+      {placesAvailable === true && (
+        <div className="relative">
+          <div
+            ref={containerRef}
+            className={`location-search-places${showConfirmed ? ' hidden' : ''}${disabled ? ' pointer-events-none opacity-50' : ''}`}
+          />
+          {showConfirmed && (
+            <div className="border-input flex h-9 w-full items-center rounded-md border bg-transparent px-3 py-1 text-sm">
+              <span className="truncate">{location.locationName}</span>
+              {!disabled && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="ml-auto shrink-0"
+                  onClick={handleClear}
+                  aria-label="Clear location"
+                >
+                  <X className="size-4" />
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fallback mode */}
+      {placesAvailable === false && (
+        <div className="relative">
+          <Input
+            ref={fallbackInputRef}
+            id="location-search"
+            type="text"
+            placeholder="e.g. Charlotte, North Carolina"
+            value={inputValue}
+            onChange={handleInputChange}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            aria-describedby={showConfirmed ? 'location-confirmed' : undefined}
+            className="pr-10"
+          />
+          {showConfirmed && !disabled && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="absolute right-1 top-1/2 -translate-y-1/2"
+              onClick={handleClear}
+              aria-label="Clear location"
+            >
+              <X className="size-4" />
+            </Button>
+          )}
+        </div>
+      )}
+
       {showConfirmed && (
         <p id="location-confirmed" className="flex items-center gap-1 text-sm text-emerald-600">
           <MapPin className="size-3.5" />
@@ -193,7 +271,7 @@ export function LocationSearch({
           )}
         </p>
       )}
-      {placesAvailable === false && (
+      {placesAvailable === false && !showConfirmed && (
         <p className="text-xs text-muted-foreground">
           Type your city or region name. Suggestions are unavailable.
         </p>

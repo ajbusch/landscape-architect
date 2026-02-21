@@ -86,6 +86,8 @@ jobs:
 
       - name: Build web app
         run: pnpm --filter @landscape-architect/web build
+        env:
+          VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
 
       - name: Build Sharp layer
         run: bash infra/layers/sharp/build.sh
@@ -114,6 +116,8 @@ jobs:
 
       - name: Build web app
         run: pnpm --filter @landscape-architect/web build
+        env:
+          VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
 
       - name: Build Sharp layer
         run: bash infra/layers/sharp/build.sh
@@ -150,6 +154,8 @@ jobs:
 
       - name: Build web app
         run: pnpm --filter @landscape-architect/web build
+        env:
+          VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
 
       - name: Build Sharp layer
         run: bash infra/layers/sharp/build.sh
