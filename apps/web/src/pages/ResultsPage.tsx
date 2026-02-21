@@ -211,7 +211,7 @@ export function ResultsPage(): React.JSX.Element {
     );
   }
 
-  const { result, photoUrl, address } = analysis;
+  const { result, photoUrl, locationName } = analysis;
   const grouped = groupByCategory(result.recommendations);
 
   return (
@@ -243,7 +243,7 @@ export function ResultsPage(): React.JSX.Element {
               {SUN_LABELS[result.overallSunExposure] ?? result.overallSunExposure}
             </Badge>
             <Badge variant="secondary">{result.estimatedSoilType} soil</Badge>
-            <Badge variant="secondary">Zone {address.zone}</Badge>
+            <Badge variant="secondary">{locationName}</Badge>
           </div>
         </div>
       </section>

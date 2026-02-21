@@ -25,7 +25,9 @@ describe('LandingPage', () => {
     it('displays the subheadline', () => {
       renderLandingPage();
 
-      expect(screen.getByText(/Upload a photo of your yard, enter your ZIP/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Upload a photo of your yard, enter your location/),
+      ).toBeInTheDocument();
     });
 
     it('renders CTA button linking to /analyze', () => {
@@ -48,7 +50,7 @@ describe('LandingPage', () => {
       renderLandingPage();
 
       expect(screen.getByText('Upload a Photo')).toBeInTheDocument();
-      expect(screen.getByText('Enter Your ZIP Code')).toBeInTheDocument();
+      expect(screen.getByText('Enter Your Location')).toBeInTheDocument();
       expect(screen.getByText('Get Recommendations')).toBeInTheDocument();
     });
 
@@ -64,7 +66,7 @@ describe('LandingPage', () => {
       renderLandingPage();
 
       expect(screen.getByText(/Snap a picture of your yard/)).toBeInTheDocument();
-      expect(screen.getByText(/USDA hardiness zone/)).toBeInTheDocument();
+      expect(screen.getByText(/tailor plant recommendations/)).toBeInTheDocument();
       expect(screen.getByText(/AI analyzes your yard/)).toBeInTheDocument();
     });
   });

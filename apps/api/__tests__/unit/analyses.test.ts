@@ -10,10 +10,6 @@ vi.mock('../../src/db.js', () => ({
   TABLE_NAME: 'test-table',
 }));
 
-vi.mock('../../src/services/zone-lookup.js', () => ({
-  getZoneByZip: vi.fn(),
-}));
-
 vi.mock('../../src/services/photo.js', () => ({
   getPhotoPresignedUrl: vi.fn(),
   getPhotoUploadUrl: vi.fn(),
@@ -35,25 +31,13 @@ vi.mock('@aws-sdk/client-lambda', () => {
 });
 
 import { docClient } from '../../src/db.js';
-import { getZoneByZip } from '../../src/services/zone-lookup.js';
 import { getPhotoPresignedUrl, getPhotoUploadUrl } from '../../src/services/photo.js';
 
 const mockSend = docClient.send as unknown as Mock;
-const mockGetZoneByZip = getZoneByZip as unknown as Mock;
 const mockGetPresignedUrl = getPhotoPresignedUrl as unknown as Mock;
 const mockGetUploadUrl = getPhotoUploadUrl as unknown as Mock;
 
 // ── Test data ──────────────────────────────────────────────────────────
-
-const sampleZone = {
-  zipCode: '28202',
-  zone: '7b',
-  zoneNumber: 7,
-  zoneLetter: 'b',
-  minTempF: 5,
-  maxTempF: 10,
-  description: 'USDA Hardiness Zone 7b (5°F to 10°F)',
-};
 
 const sampleRecommendations = [
   {
@@ -94,7 +78,9 @@ const sampleRecommendations = [
 
 const analysisBody = {
   photoKey: 'photos/anonymous/test-id/original.jpg',
-  zipCode: '28202',
+  latitude: 35.23,
+  longitude: -80.84,
+  locationName: 'Charlotte, North Carolina, USA',
 };
 
 // ── Tests ──────────────────────────────────────────────────────────────
@@ -154,7 +140,6 @@ describe('Analysis routes', () => {
 
   describe('POST /api/v1/analyses', () => {
     it('returns 202 with analysis id and pending status', async () => {
-      mockGetZoneByZip.mockReturnValue(sampleZone);
       mockSend.mockResolvedValue({}); // DynamoDB PutCommand
 
       const response = await app.inject({
@@ -170,15 +155,19 @@ describe('Analysis routes', () => {
       expect(result.status).toBe('pending');
     });
 
-    it('writes pending record to DynamoDB', async () => {
-      mockGetZoneByZip.mockReturnValue(sampleZone);
+    it('writes pending record to DynamoDB with rounded coordinates', async () => {
       mockSend.mockResolvedValue({});
 
       await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(analysisBody),
+        body: JSON.stringify({
+          photoKey: 'photos/anonymous/test-id/original.jpg',
+          latitude: 35.2271234,
+          longitude: -80.8431456,
+          locationName: 'Charlotte, North Carolina, USA',
+        }),
       });
 
       expect(mockSend).toHaveBeenCalledOnce();
@@ -189,8 +178,9 @@ describe('Analysis routes', () => {
       const item = input.Item as Record<string, unknown>;
       expect(item.status).toBe('pending');
       expect(item.photoKey).toBe('photos/anonymous/test-id/original.jpg');
-      expect(item.zipCode).toBe('28202');
-      expect(item.zone).toBe('7b');
+      expect(item.latitude).toBe(35.23);
+      expect(item.longitude).toBe(-80.84);
+      expect(item.locationName).toBe('Charlotte, North Carolina, USA');
       expect(item.ttl).toBeTypeOf('number');
       expect(item.createdAt).toBeDefined();
       expect(item.updatedAt).toBeDefined();
@@ -201,37 +191,79 @@ describe('Analysis routes', () => {
         method: 'POST',
         url: '/api/v1/analyses',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ zipCode: '28202' }),
+        body: JSON.stringify({
+          latitude: 35.23,
+          longitude: -80.84,
+          locationName: 'Charlotte, NC',
+        }),
       });
 
       expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body).error).toContain('photoKey');
     });
 
-    it('returns 400 when zipCode is missing', async () => {
+    it('returns 400 when locationName is missing', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ photoKey: 'photos/test.jpg' }),
+        body: JSON.stringify({
+          photoKey: 'photos/test.jpg',
+          latitude: 35.23,
+          longitude: -80.84,
+        }),
       });
 
       expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body).error).toContain('zipCode');
     });
 
-    it('returns 404 when ZIP code not found', async () => {
-      mockGetZoneByZip.mockReturnValue(null);
+    it('returns 400 when latitude and longitude have mixed nullability', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/analyses',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          photoKey: 'photos/test.jpg',
+          latitude: 35.23,
+          longitude: null,
+          locationName: 'Charlotte, NC',
+        }),
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('accepts null coordinates for fallback path', async () => {
+      mockSend.mockResolvedValue({});
 
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/analyses',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(analysisBody),
+        body: JSON.stringify({
+          photoKey: 'photos/test.jpg',
+          latitude: null,
+          longitude: null,
+          locationName: 'Charlotte, North Carolina',
+        }),
       });
 
-      expect(response.statusCode).toBe(404);
-      expect(JSON.parse(response.body).error).toBe('ZIP code not found');
+      expect(response.statusCode).toBe(202);
+    });
+
+    it('returns 400 when latitude is out of range', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/analyses',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          photoKey: 'photos/test.jpg',
+          latitude: 91,
+          longitude: -80.84,
+          locationName: 'Charlotte, NC',
+        }),
+      });
+
+      expect(response.statusCode).toBe(400);
     });
   });
 
@@ -288,7 +320,9 @@ describe('Analysis routes', () => {
       const completeResult = {
         id: '55efd08d-b675-4cb2-a271-ecd2b7003599',
         photoUrl: 'https://s3.example.com/old-url',
-        address: { zipCode: '28202', zone: '7b' },
+        latitude: 35.23,
+        longitude: -80.84,
+        locationName: 'Charlotte, North Carolina, USA',
         result: {
           summary: 'A nice yard.',
           yardSize: 'medium',

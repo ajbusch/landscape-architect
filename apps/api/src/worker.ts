@@ -17,9 +17,9 @@ import { logger } from './lib/logger.js';
 interface WorkerEvent {
   analysisId: string;
   photoKey: string;
-  zipCode: string;
-  zone: string;
-  zoneDescription: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationName: string;
 }
 
 const SEVEN_DAYS_S = 7 * 24 * 60 * 60;
@@ -57,13 +57,16 @@ async function updateStatus(
 }
 
 export async function handler(event: WorkerEvent, context: Context): Promise<void> {
-  const { analysisId, photoKey, zipCode, zone, zoneDescription } = event;
+  const { analysisId, photoKey, latitude, longitude, locationName } = event;
   const t0Total = Date.now();
   let lastStep = 'start';
 
   const log = logger.child({ analysisId, awsRequestId: context.awsRequestId });
 
-  log.info({ coldStart: isColdStart, step: 'start', photoKey, zone }, 'Worker started');
+  log.info(
+    { coldStart: isColdStart, step: 'start', photoKey, locationName, latitude, longitude },
+    'Worker started',
+  );
   isColdStart = false;
 
   try {
@@ -177,7 +180,13 @@ export async function handler(event: WorkerEvent, context: Context): Promise<voi
 
     // ── 5. Call Claude Vision API ───────────────────────────────────
     const t0Claude = Date.now();
-    const aiResult = await analyzeYardPhoto(base64Photo, aiMediaType, zone, zoneDescription);
+    const aiResult = await analyzeYardPhoto(
+      base64Photo,
+      aiMediaType,
+      locationName,
+      latitude,
+      longitude,
+    );
     const claudeDuration = Date.now() - t0Claude;
     lastStep = 'claude';
 
@@ -238,7 +247,9 @@ export async function handler(event: WorkerEvent, context: Context): Promise<voi
       const analysisResponse: AnalysisResponse = {
         id: analysisId,
         photoUrl,
-        address: { zipCode, zone },
+        latitude,
+        longitude,
+        locationName,
         result: {
           summary:
             aiResult.data.invalidPhotoReason ??
@@ -273,7 +284,8 @@ export async function handler(event: WorkerEvent, context: Context): Promise<voi
 
     // ── 9. Match plant types to real plants ──────────────────────────
     const t0Match = Date.now();
-    const recommendations = await matchPlants(aiResult.data, zone);
+    const climateZone = aiResult.data.climate.usdaZone ?? null;
+    const recommendations = await matchPlants(aiResult.data, climateZone);
     const matchDuration = Date.now() - t0Match;
     lastStep = 'matching';
     log.info(
@@ -300,7 +312,9 @@ export async function handler(event: WorkerEvent, context: Context): Promise<voi
     const analysisResponse: AnalysisResponse = {
       id: analysisId,
       photoUrl,
-      address: { zipCode, zone },
+      latitude,
+      longitude,
+      locationName,
       result: {
         summary: aiResult.data.summary,
         yardSize: aiResult.data.yardSize,
@@ -319,7 +333,15 @@ export async function handler(event: WorkerEvent, context: Context): Promise<voi
     lastStep = 'save_result';
     log.info({ step: 'save_result' }, 'Result saved');
 
-    log.info({ step: 'complete', duration: Date.now() - t0Total }, 'Worker complete');
+    log.info(
+      {
+        step: 'complete',
+        duration: Date.now() - t0Total,
+        climateZonePresent: !!climateZone,
+        climateUsdaZone: climateZone,
+      },
+      'Worker complete',
+    );
   } catch (err) {
     log.error(
       {

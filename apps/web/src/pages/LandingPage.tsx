@@ -24,9 +24,9 @@ const STEPS = [
   },
   {
     icon: <MapPin className="size-8" />,
-    title: 'Enter Your ZIP Code',
+    title: 'Enter Your Location',
     description:
-      "We'll look up your USDA hardiness zone so we recommend plants that thrive in your climate.",
+      "Tell us where your yard is and we'll tailor plant recommendations to your local climate.",
   },
   {
     icon: <Sparkles className="size-8" />,
@@ -76,7 +76,7 @@ export function LandingPage(): React.JSX.Element {
             Transform Your Yard with AI-Powered Plant Recommendations
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground md:text-xl">
-            Upload a photo of your yard, enter your ZIP code, and get a personalized analysis with
+            Upload a photo of your yard, enter your location, and get a personalized analysis with
             plant recommendations tailored to your climate, soil, and sunlight.
           </p>
           <Button asChild size="lg" className="mt-8">

@@ -1,11 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { ZipCodeSchema } from '@landscape-architect/shared';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { PhotoDropzone } from '@/components/PhotoDropzone';
-import { ZipCodeInput } from '@/components/ZipCodeInput';
+import { LocationSearch } from '@/components/LocationSearch';
+import type { LocationData } from '@/components/LocationSearch';
 import { submitAnalysis, pollAnalysis, ApiError } from '@/services/api';
 import { Loader2, AlertCircle, X } from 'lucide-react';
 
@@ -15,7 +15,7 @@ const POLL_TIMEOUT_MS = 120_000;
 const STATUS_MESSAGES: Record<string, string> = {
   pending: 'Starting analysis...',
   analyzing: 'Analyzing your yard...',
-  matching: 'Finding perfect plants for your zone...',
+  matching: 'Finding the perfect plants for you...',
 };
 
 function getErrorMessage(err: unknown): string {
@@ -33,8 +33,7 @@ function getErrorMessage(err: unknown): string {
 export function AnalyzePage(): React.JSX.Element {
   const navigate = useNavigate();
   const [photo, setPhoto] = useState<File | null>(null);
-  const [zipCode, setZipCode] = useState('');
-  const [zone, setZone] = useState<string | null>(null);
+  const [location, setLocation] = useState<LocationData | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [polling, setPolling] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -44,8 +43,7 @@ export function AnalyzePage(): React.JSX.Element {
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
 
-  const isZipValid = ZipCodeSchema.safeParse(zipCode).success;
-  const canSubmit = photo !== null && zone !== null && isZipValid && !submitting && !polling;
+  const canSubmit = photo !== null && location !== null && !submitting && !polling;
   const isProcessing = submitting || polling;
 
   const stopPolling = useCallback(() => {
@@ -124,21 +122,26 @@ export function AnalyzePage(): React.JSX.Element {
   );
 
   const handleSubmit = useCallback(async () => {
-    if (!photo || !isZipValid) return;
+    if (!photo || !location) return;
 
     setSubmitting(true);
     setError(null);
     cancelledRef.current = false;
 
     try {
-      const { id } = await submitAnalysis(photo, zipCode);
+      const { id } = await submitAnalysis(
+        photo,
+        location.latitude,
+        location.longitude,
+        location.locationName,
+      );
       setSubmitting(false);
       startPolling(id);
     } catch (err: unknown) {
       setError(getErrorMessage(err));
       setSubmitting(false);
     }
-  }, [photo, isZipValid, zipCode, startPolling]);
+  }, [photo, location, startPolling]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -146,7 +149,7 @@ export function AnalyzePage(): React.JSX.Element {
         <CardHeader>
           <CardTitle className="text-2xl">Analyze Your Yard</CardTitle>
           <CardDescription>
-            Upload a photo of your yard and enter your ZIP code to get personalized plant
+            Upload a photo of your yard and enter your location to get personalized plant
             recommendations.
           </CardDescription>
         </CardHeader>
@@ -156,11 +159,9 @@ export function AnalyzePage(): React.JSX.Element {
             <PhotoDropzone file={photo} onFileChange={setPhoto} disabled={isProcessing} />
           </div>
 
-          <ZipCodeInput
-            value={zipCode}
-            onChange={setZipCode}
-            zone={zone}
-            onZoneResolved={setZone}
+          <LocationSearch
+            location={location}
+            onLocationChange={setLocation}
             disabled={isProcessing}
             onSubmit={() => void handleSubmit()}
           />

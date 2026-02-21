@@ -11,10 +11,6 @@ vi.mock('../../src/db.js', () => ({
   TABLE_NAME: 'test-table',
 }));
 
-vi.mock('../../src/services/zone-lookup.js', () => ({
-  getZoneByZip: vi.fn(),
-}));
-
 vi.mock('../../src/services/photo.js', () => ({
   getPhotoPresignedUrl: vi.fn(),
   getPhotoUploadUrl: vi.fn(),
@@ -36,27 +32,17 @@ vi.mock('@aws-sdk/client-lambda', () => {
 });
 
 import { docClient } from '../../src/db.js';
-import { getZoneByZip } from '../../src/services/zone-lookup.js';
 import { getPhotoPresignedUrl } from '../../src/services/photo.js';
 
 const mockSend = docClient.send as unknown as Mock;
-const mockGetZoneByZip = getZoneByZip as unknown as Mock;
 const mockGetPresignedUrl = getPhotoPresignedUrl as unknown as Mock;
-
-const sampleZone = {
-  zipCode: '28202',
-  zone: '7b',
-  zoneNumber: 7,
-  zoneLetter: 'b',
-  minTempF: 5,
-  maxTempF: 10,
-  description: 'USDA Hardiness Zone 7b (5°F to 10°F)',
-};
 
 const sampleCompleteResult = {
   id: '55efd08d-b675-4cb2-a271-ecd2b7003501',
   photoUrl: 'https://s3.example.com/presigned',
-  address: { zipCode: '28202', zone: '7b' },
+  latitude: 35.23,
+  longitude: -80.84,
+  locationName: 'Charlotte, North Carolina, USA',
   result: {
     summary: 'A medium-sized suburban backyard with mature trees and a patio area.',
     yardSize: 'medium',
@@ -114,7 +100,6 @@ describe('Analysis integration flow', () => {
   });
 
   it('end-to-end: POST creates pending analysis and returns 202', async () => {
-    mockGetZoneByZip.mockReturnValue(sampleZone);
     mockSend.mockResolvedValue({}); // DynamoDB PutCommand
 
     const response = await app.inject({
@@ -123,7 +108,9 @@ describe('Analysis integration flow', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         photoKey: 'photos/anonymous/test-id/original.jpg',
-        zipCode: '28202',
+        latitude: 35.23,
+        longitude: -80.84,
+        locationName: 'Charlotte, North Carolina, USA',
       }),
     });
 
@@ -140,12 +127,12 @@ describe('Analysis integration flow', () => {
     const item = input.Item as Record<string, unknown>;
     expect(item.status).toBe('pending');
     expect(item.photoKey).toBe('photos/anonymous/test-id/original.jpg');
-    expect(item.zipCode).toBe('28202');
-    expect(item.zone).toBe('7b');
+    expect(item.latitude).toBe(35.23);
+    expect(item.longitude).toBe(-80.84);
+    expect(item.locationName).toBe('Charlotte, North Carolina, USA');
   });
 
   it('end-to-end: POST then GET returns consistent pending data', async () => {
-    mockGetZoneByZip.mockReturnValue(sampleZone);
     mockSend.mockResolvedValue({});
 
     // POST to create
@@ -155,7 +142,9 @@ describe('Analysis integration flow', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         photoKey: 'photos/anonymous/test-id/original.jpg',
-        zipCode: '28202',
+        latitude: 35.23,
+        longitude: -80.84,
+        locationName: 'Charlotte, North Carolina, USA',
       }),
     });
 
@@ -169,8 +158,9 @@ describe('Analysis integration flow', () => {
         id: created.id,
         status: 'pending',
         photoKey: 'photos/anonymous/test-id/original.jpg',
-        zipCode: '28202',
-        zone: '7b',
+        latitude: 35.23,
+        longitude: -80.84,
+        locationName: 'Charlotte, North Carolina, USA',
         createdAt: '2026-02-16T00:00:00.000Z',
         updatedAt: '2026-02-16T00:00:00.000Z',
         ttl: Math.floor(Date.now() / 1000) + 86400,

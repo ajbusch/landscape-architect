@@ -27,7 +27,9 @@ import { toast } from 'sonner';
 const MOCK_ANALYSIS: AnalysisResponse = {
   id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   photoUrl: 'https://example.com/yard.jpg',
-  address: { zipCode: '28202', zone: '7b' },
+  latitude: 35.23,
+  longitude: -80.84,
+  locationName: 'Charlotte, North Carolina, USA',
   tier: 'free',
   createdAt: '2026-01-15T10:00:00Z',
   result: {
@@ -208,7 +210,7 @@ describe('ResultsPage', () => {
       });
       expect(screen.getAllByText('Partial Shade').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('loamy soil')).toBeInTheDocument();
-      expect(screen.getByText('Zone 7b')).toBeInTheDocument();
+      expect(screen.getByText('Charlotte, North Carolina, USA')).toBeInTheDocument();
     });
   });
 

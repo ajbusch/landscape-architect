@@ -68,7 +68,12 @@ async function main(): Promise<void> {
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ photoKey: s3Key, zipCode: '22903' }),
+      body: JSON.stringify({
+        photoKey: s3Key,
+        latitude: 38.03,
+        longitude: -78.48,
+        locationName: 'Charlottesville, Virginia, USA',
+      }),
     },
   );
   log(`Analysis created: id=${id}, status=${initialStatus}`);
