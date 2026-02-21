@@ -15,6 +15,7 @@ Before pushing any branch or opening a PR:
 5. Push the branch and open a PR
 6. After pushing, monitor CI with `gh run watch`. If CI fails, pull the logs, fix the issue, push again, and repeat until CI is green.
 7. Once CI passes, squash merge the PR: `gh pr merge --squash --delete-branch`
+8. Close the corresponding GitHub issue: `gh issue close <number> --comment "Completed in PR #<pr-number>"`
 
 Never push code with known failing tests.
 Use `--force` on lint to bypass Turborepo cache and catch all errors.
@@ -78,3 +79,25 @@ When fixing Lambda or API issues:
 3. Test API endpoints directly with curl
 4. Check stack outputs: `aws cloudformation describe-stacks --stack-name STACK_NAME --query 'Stacks[0].Outputs'`
 5. After deploying a fix, verify the Lambda starts and the endpoint responds before opening a PR
+
+## Task Tracking
+
+Before starting work, check for a relevant GitHub issue:
+
+```sh
+gh issue list --state open
+```
+
+When work is done, close the issue with context:
+
+```sh
+gh issue close <number> --comment "Completed in PR #<pr>. Changes: <brief summary>"
+```
+
+When you discover work that isn't tracked, create an issue:
+
+```sh
+gh issue create --title "Short descriptive title" --label "relevant,labels" --body "Description"
+```
+
+Don't create issues for trivial fixes included in a larger task.
