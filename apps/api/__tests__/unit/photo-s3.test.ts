@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Mock } from 'vitest';
 
 // ── Mock S3 ─────────────────────────────────────────────────────────────
 
@@ -220,11 +219,9 @@ describe('photo S3 and image processing', () => {
       const url = await getPhotoPresignedUrl('photos/test/original.jpg');
 
       expect(url).toBe('https://s3.example.com/signed');
-      expect(mockGetSignedUrl).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        { expiresIn: 900 },
-      );
+      expect(mockGetSignedUrl).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+        expiresIn: 900,
+      });
     });
   });
 
@@ -238,11 +235,9 @@ describe('photo S3 and image processing', () => {
 
       expect(result.uploadUrl).toBe('https://s3.example.com/put-signed');
       expect(result.s3Key).toBe('photos/anonymous/analysis-456/original.png');
-      expect(mockGetSignedUrl).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        { expiresIn: 300 },
-      );
+      expect(mockGetSignedUrl).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+        expiresIn: 300,
+      });
     });
   });
 });

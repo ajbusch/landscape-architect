@@ -127,7 +127,12 @@ const matchedPlants = [
 function setupHappyPath(): void {
   mockDbSend.mockResolvedValue({});
   mockDownloadPhoto.mockResolvedValue(jpegBuffer);
-  mockValidatePhoto.mockReturnValue({ valid: true, type: 'jpeg', mediaType: 'image/jpeg', ext: 'jpg' });
+  mockValidatePhoto.mockReturnValue({
+    valid: true,
+    type: 'jpeg',
+    mediaType: 'image/jpeg',
+    ext: 'jpg',
+  });
   mockResizeForApi.mockResolvedValue(resizedBuffer);
   mockAnalyzeYardPhoto.mockResolvedValue(validAiResult);
   mockMatchPlants.mockResolvedValue(matchedPlants);
@@ -190,8 +195,9 @@ describe('worker handler', () => {
 
       // Last DynamoDB call should contain the result
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       const result = values[':result'] as Record<string, unknown>;
       expect(result.id).toBe('test-analysis-id');
       expect(result.photoUrl).toBe('https://s3.example.com/signed');
@@ -205,7 +211,12 @@ describe('worker handler', () => {
   describe('HEIC photo', () => {
     it('converts HEIC to JPEG before sending to Claude', async () => {
       setupHappyPath();
-      mockValidatePhoto.mockReturnValue({ valid: true, type: 'heic', mediaType: 'image/heic', ext: 'heic' });
+      mockValidatePhoto.mockReturnValue({
+        valid: true,
+        type: 'heic',
+        mediaType: 'image/heic',
+        ext: 'heic',
+      });
       const convertedBuffer = Buffer.from('converted-jpeg');
       mockConvertHeic.mockResolvedValue(convertedBuffer);
       mockResizeForApi.mockResolvedValue(convertedBuffer);
@@ -224,15 +235,21 @@ describe('worker handler', () => {
 
     it('fails gracefully when HEIC conversion throws', async () => {
       setupHappyPath();
-      mockValidatePhoto.mockReturnValue({ valid: true, type: 'heic', mediaType: 'image/heic', ext: 'heic' });
+      mockValidatePhoto.mockReturnValue({
+        valid: true,
+        type: 'heic',
+        mediaType: 'image/heic',
+        ext: 'heic',
+      });
       mockConvertHeic.mockRejectedValue(new Error('Sharp HEIC decode failed'));
 
       await handler(baseEvent, fakeContext);
 
       // Should update status to failed
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       expect(values[':status']).toBe('failed');
       expect(values[':error']).toContain('image format');
       // Should NOT call Claude
@@ -245,7 +262,12 @@ describe('worker handler', () => {
   describe('PNG photo', () => {
     it('passes PNG media type through without conversion', async () => {
       setupHappyPath();
-      mockValidatePhoto.mockReturnValue({ valid: true, type: 'png', mediaType: 'image/png', ext: 'png' });
+      mockValidatePhoto.mockReturnValue({
+        valid: true,
+        type: 'png',
+        mediaType: 'image/png',
+        ext: 'png',
+      });
 
       await handler(baseEvent, fakeContext);
 
@@ -270,8 +292,9 @@ describe('worker handler', () => {
       await handler(baseEvent, fakeContext);
 
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       expect(values[':status']).toBe('failed');
       expect(values[':error']).toContain('retrieve photo');
     });
@@ -292,13 +315,17 @@ describe('worker handler', () => {
   describe('photo validation failure', () => {
     it('updates status to failed for invalid photo format', async () => {
       setupHappyPath();
-      mockValidatePhoto.mockReturnValue({ valid: false, error: 'Please upload a JPEG, PNG, or HEIC image' });
+      mockValidatePhoto.mockReturnValue({
+        valid: false,
+        error: 'Please upload a JPEG, PNG, or HEIC image',
+      });
 
       await handler(baseEvent, fakeContext);
 
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       expect(values[':status']).toBe('failed');
       expect(values[':error']).toContain('image format');
       expect(mockAnalyzeYardPhoto).not.toHaveBeenCalled();
@@ -318,8 +345,9 @@ describe('worker handler', () => {
       await handler(baseEvent, fakeContext);
 
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       expect(values[':status']).toBe('failed');
       expect(values[':error']).toContain('timed out');
     });
@@ -334,8 +362,9 @@ describe('worker handler', () => {
       await handler(baseEvent, fakeContext);
 
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       expect(values[':status']).toBe('failed');
       expect(values[':error']).toContain('busy');
     });
@@ -350,8 +379,9 @@ describe('worker handler', () => {
       await handler(baseEvent, fakeContext);
 
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       expect(values[':status']).toBe('failed');
       expect(values[':error']).toContain('failed');
     });
@@ -366,8 +396,9 @@ describe('worker handler', () => {
       await handler(baseEvent, fakeContext);
 
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       expect(values[':status']).toBe('failed');
     });
 
@@ -407,10 +438,13 @@ describe('worker handler', () => {
 
       // Should still save a complete result
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       expect(values[':status']).toBe('complete');
-      const result = values[':result'] as { result: { summary: string; features: unknown[]; recommendations: unknown[] } };
+      const result = values[':result'] as {
+        result: { summary: string; features: unknown[]; recommendations: unknown[] };
+      };
       expect(result.result.summary).toContain('cat');
       expect(result.result.features).toEqual([]);
       expect(result.result.recommendations).toEqual([]);
@@ -427,8 +461,9 @@ describe('worker handler', () => {
       await handler(baseEvent, fakeContext);
 
       const lastCall = mockDbSend.mock.calls[mockDbSend.mock.calls.length - 1]!;
-      const values = (lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } })
-        .input.ExpressionAttributeValues;
+      const values = (
+        lastCall[0] as { input: { ExpressionAttributeValues: Record<string, unknown> } }
+      ).input.ExpressionAttributeValues;
       expect(values[':status']).toBe('failed');
     });
 
