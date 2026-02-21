@@ -113,3 +113,15 @@ Detailed architecture and design docs live in `specs/`. Consult these when build
 - `specs/frontend/` — Frontend spec
 - `specs/security/` — Security spec
 - `specs/observability.spec.md` — Observability spec
+
+## Task Tracking
+
+GitHub Issues is the task tracker. Use `gh` CLI to interact with issues.
+
+- `gh issue list --state open` — see current work
+- `gh issue close <number> --comment "reason"` — close when completing work
+- `gh issue create --title "..." --label "label1,label2" --body "..."` — create when discovering new work
+
+Labels: `api`, `frontend`, `infra`, `security`, `observability`, `testing`, `enhancement`, `decision`, `plant-database`, `github_actions`
+
+When starting a task, check if there's already an issue for it. When finishing, close the issue with a comment explaining what was done.
