@@ -6,6 +6,7 @@ import type { AnalysisResponse } from '@landscape-architect/shared';
 import { AnalysisRequestSchema, AnalysisResponseSchema } from '@landscape-architect/shared';
 import { docClient, TABLE_NAME } from '../db.js';
 import { getPhotoUploadUrl, getPhotoPresignedUrl } from '../services/photo.js';
+import { sendError, sendValidationError } from '../lib/errors.js';
 
 const SEVEN_DAYS_S = 7 * 24 * 60 * 60;
 
@@ -30,9 +31,11 @@ export function analysesRoute(app: FastifyInstance): void {
     const ext = CONTENT_TYPE_TO_EXT[contentType];
 
     if (!ext) {
-      return await reply
-        .status(400)
-        .send({ error: 'Unsupported content type. Use image/jpeg, image/png, or image/heic.' });
+      return sendError(
+        reply,
+        400,
+        'Unsupported content type. Use image/jpeg, image/png, or image/heic.',
+      );
     }
 
     const analysisId = randomUUID();
@@ -51,10 +54,7 @@ export function analysesRoute(app: FastifyInstance): void {
     // ── 1. Validate input ─────────────────────────────────────────────
     const parsed = AnalysisRequestSchema.safeParse(request.body);
     if (!parsed.success) {
-      return await reply.status(400).send({
-        error: 'Invalid input',
-        details: parsed.error.issues,
-      });
+      return sendValidationError(reply, parsed.error.issues);
     }
 
     const { photoKey, locationName } = parsed.data;
@@ -119,7 +119,7 @@ export function analysesRoute(app: FastifyInstance): void {
       );
     } catch (err) {
       request.log.error(err, 'Failed to invoke worker Lambda');
-      return await reply.status(500).send({ error: 'Failed to start analysis' });
+      return sendError(reply, 500, 'Failed to start analysis');
     }
 
     // ── 5. Return 202 Accepted ────────────────────────────────────────
@@ -140,7 +140,7 @@ export function analysesRoute(app: FastifyInstance): void {
     );
 
     if (!result.Item) {
-      return await reply.status(404).send({ error: 'Analysis not found' });
+      return sendError(reply, 404, 'Analysis not found');
     }
 
     const item = result.Item;
@@ -149,7 +149,7 @@ export function analysesRoute(app: FastifyInstance): void {
     if (item.ttl && typeof item.ttl === 'number') {
       const now = Math.floor(Date.now() / 1000);
       if (item.ttl < now) {
-        return await reply.status(404).send({ error: 'Analysis not found' });
+        return sendError(reply, 404, 'Analysis not found');
       }
     }
 
@@ -213,6 +213,6 @@ export function analysesRoute(app: FastifyInstance): void {
       request.log.error('Stored analysis failed schema validation');
     }
 
-    return await reply.status(500).send({ error: 'Internal server error' });
+    return sendError(reply, 500, 'Internal server error');
   });
 }

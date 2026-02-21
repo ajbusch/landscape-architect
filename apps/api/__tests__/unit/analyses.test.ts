@@ -132,7 +132,10 @@ describe('Analysis routes', () => {
       });
 
       expect(response.statusCode).toBe(400);
-      expect(JSON.parse(response.body).error).toContain('Unsupported content type');
+      const body = JSON.parse(response.body);
+      expect(body.statusCode).toBe(400);
+      expect(body.error).toBe('Bad Request');
+      expect(body.message).toContain('Unsupported content type');
     });
   });
 
@@ -403,7 +406,10 @@ describe('Analysis routes', () => {
       });
 
       expect(response.statusCode).toBe(404);
-      expect(JSON.parse(response.body).error).toBe('Analysis not found');
+      const body = JSON.parse(response.body);
+      expect(body.statusCode).toBe(404);
+      expect(body.error).toBe('Not Found');
+      expect(body.message).toBe('Analysis not found');
     });
 
     it('returns 404 when analysis is expired', async () => {

@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createApp } from '../../src/app.js';
-import { PlantSchema, PlantSearchResponseSchema } from '@landscape-architect/shared';
+import {
+  PlantSchema,
+  PlantSearchResponseSchema,
+  ErrorResponseSchema,
+} from '@landscape-architect/shared';
 import type { FastifyInstance } from 'fastify';
 
 // Mock the db module
@@ -91,7 +95,7 @@ describe('Contract: Plant endpoints', () => {
     expect(result.success).toBe(true);
   });
 
-  it('GET /api/v1/plants/:id returns 404 object for missing plant', async () => {
+  it('GET /api/v1/plants/:id returns 404 conforming to ErrorResponseSchema', async () => {
     mockSend.mockResolvedValueOnce({ Item: undefined });
 
     const response = await app.inject({
@@ -101,6 +105,8 @@ describe('Contract: Plant endpoints', () => {
 
     expect(response.statusCode).toBe(404);
     const body = JSON.parse(response.body);
-    expect(body.error).toBe('Plant not found');
+    const result = ErrorResponseSchema.safeParse(body);
+    expect(result.success).toBe(true);
+    expect(body.message).toBe('Plant not found');
   });
 });
