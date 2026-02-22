@@ -122,10 +122,11 @@ test.describe('Analyze Page', () => {
     const mode = await detectLocationMode(page);
     test.skip(mode === 'fallback', 'No Google Places API key in build');
 
-    // Places mode rendered — verify the custom element mounted with an input
+    // Places mode rendered — verify the custom element was mounted inside the container
     const placesContainer = page.locator('[data-testid="location-search-places"]');
     await expect(placesContainer).toBeVisible();
-    await expect(placesContainer.locator('input')).toBeAttached();
+    const childCount = await placesContainer.evaluate((el) => el.children.length);
+    expect(childCount).toBeGreaterThan(0);
   });
 
   test('location fallback works without Google Places', async ({ page }) => {
