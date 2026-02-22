@@ -124,6 +124,17 @@ export function LocationSearch({
               locationName: name,
             });
           }
+        })
+        .catch(() => {
+          // fetchFields failed — fall back to the place's displayName if available
+          const name = place.displayName;
+          if (name) {
+            onLocationChangeRef.current({
+              latitude: null,
+              longitude: null,
+              locationName: name,
+            });
+          }
         });
     }) as EventListener);
 
