@@ -29,17 +29,19 @@ async function selectPlaceSynthetic(page: Page, name: string): Promise<void> {
     if (!pac) throw new Error('PlaceAutocompleteElement not found');
 
     const event = new Event('gmp-select', { bubbles: true });
-    Object.defineProperty(event, 'place', {
+    Object.defineProperty(event, 'placePrediction', {
       value: {
-        displayName: placeName,
-        fetchFields: () =>
-          Promise.resolve({
-            place: {
-              location: null,
-              formattedAddress: placeName,
-              displayName: placeName,
-            },
-          }),
+        text: placeName,
+        toPlace: () => ({
+          fetchFields: () =>
+            Promise.resolve({
+              place: {
+                location: null,
+                formattedAddress: placeName,
+                displayName: placeName,
+              },
+            }),
+        }),
       },
     });
     pac.dispatchEvent(event);

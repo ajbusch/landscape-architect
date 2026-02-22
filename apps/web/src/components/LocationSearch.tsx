@@ -96,14 +96,15 @@ export function LocationSearch({
     }
     pacRef.current = null;
 
-    const pac = new google.maps.places.PlaceAutocompleteElement({});
-    // Runtime property is `includedPrimaryTypes`; @types/google.maps lags behind
-    (pac as unknown as { includedPrimaryTypes: string[] }).includedPrimaryTypes = ['(regions)'];
+    const pac = new google.maps.places.PlaceAutocompleteElement({
+      types: ['(regions)'],
+    });
 
     pac.addEventListener('gmp-select', ((
-      event: google.maps.places.PlaceAutocompletePlaceSelectEvent,
+      event: Event & { placePrediction: google.maps.places.PlacePrediction },
     ) => {
-      const { place } = event;
+      const prediction = event.placePrediction;
+      const place = prediction.toPlace();
 
       void place
         .fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] })
@@ -126,8 +127,8 @@ export function LocationSearch({
           }
         })
         .catch(() => {
-          // fetchFields failed — fall back to the place's displayName if available
-          const name = place.displayName;
+          // fetchFields failed — fall back to the prediction text
+          const name = prediction.text.text;
           if (name) {
             onLocationChangeRef.current({
               latitude: null,
