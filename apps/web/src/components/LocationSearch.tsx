@@ -209,6 +209,7 @@ export function LocationSearch({
         <div className="relative">
           <div
             ref={containerRef}
+            data-testid="location-search-places"
             className={`location-search-places${showConfirmed ? ' hidden' : ''}${disabled ? ' pointer-events-none opacity-50' : ''}`}
           />
           {showConfirmed && (

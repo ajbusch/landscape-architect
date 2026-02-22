@@ -65,6 +65,25 @@ test.describe('Analyze Page', () => {
     await expect(submitButton).toBeEnabled();
   });
 
+  test('Google Places autocomplete renders when API key is present', async ({ page }) => {
+    // Wait for the location component to settle into Places or fallback mode
+    const placesContainer = page.locator('[data-testid="location-search-places"]');
+    const fallbackHint = page.getByText('Suggestions are unavailable');
+
+    const mode = await Promise.race([
+      placesContainer.waitFor({ timeout: 10_000 }).then(() => 'places' as const),
+      fallbackHint.waitFor({ timeout: 10_000 }).then(() => 'fallback' as const),
+    ]);
+
+    test.skip(mode === 'fallback', 'No Google Places API key in build');
+
+    // Places mode rendered — verify the custom element mounted with an input
+    await expect(placesContainer).toBeVisible();
+    const autocomplete = placesContainer.locator('gmp-place-autocomplete');
+    await expect(autocomplete).toBeAttached();
+    await expect(autocomplete.locator('input')).toBeAttached();
+  });
+
   test('location fallback works without Google Places', async ({ page }) => {
     const locationInput = page.getByLabel('Location');
     await locationInput.fill('Charlotte, North Carolina');
