@@ -69,6 +69,15 @@ All five must pass. CI also runs `pnpm test:contract`, `pnpm test:integration`, 
 | Shared  | `packages/shared/src/schemas/*.test.ts`           | Co-located with schemas |
 | Infra   | `infra/__tests__/assertion/`                      | One file per stack      |
 
+### Bug Fix Regression Tests
+
+Every bug fix **must** include a regression test that reproduces the bug and verifies the fix. Pick the appropriate test level:
+
+- **Unit test** — for logic bugs, incorrect calculations, schema mismatches, or edge cases in a single module.
+- **E2E test** — for bugs involving user-facing flows, cross-component interactions, or issues that only manifest in the browser.
+
+The test should fail without the fix and pass with it.
+
 ### Coverage Thresholds
 
 - API: 85% statements/functions/lines, 90% branches
