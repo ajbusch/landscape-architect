@@ -96,9 +96,9 @@ export function LocationSearch({
     }
     pacRef.current = null;
 
-    const pac = new google.maps.places.PlaceAutocompleteElement({
-      types: ['(regions)'],
-    });
+    const pac = new google.maps.places.PlaceAutocompleteElement({});
+    // Runtime property is `includedPrimaryTypes`; @types/google.maps lags behind
+    (pac as unknown as { includedPrimaryTypes: string[] }).includedPrimaryTypes = ['(regions)'];
 
     pac.addEventListener('gmp-select', ((
       event: google.maps.places.PlaceAutocompletePlaceSelectEvent,
