@@ -169,6 +169,99 @@ describe('AnalyzePage', () => {
     });
   });
 
+  describe('Location input (Places mode)', () => {
+    let mockFetchFields: Mock;
+
+    beforeEach(() => {
+      mockFetchFields = vi.fn();
+      vi.stubEnv('VITE_GOOGLE_PLACES_API_KEY', 'test-key');
+
+      const mockPacElement = document.createElement('div');
+
+      globalThis.google = {
+        maps: {
+          importLibrary: vi.fn().mockResolvedValue({}),
+          places: {
+            PlaceAutocompleteElement: vi.fn(function () {
+              return mockPacElement;
+            }),
+          },
+        },
+      } as unknown as typeof google;
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      // @ts-expect-error -- clean up global mock
+      delete globalThis.google;
+    });
+
+    function dispatchGmpSelect(pac: Element): void {
+      const event = new Event('gmp-select', { bubbles: true });
+      Object.defineProperty(event, 'placePrediction', {
+        value: {
+          text: { text: 'Charlotte, NC' },
+          toPlace: () => ({ fetchFields: mockFetchFields }),
+        },
+      });
+      pac.dispatchEvent(event);
+    }
+
+    it('sets location when gmp-select fires with placePrediction', async () => {
+      vi.useRealTimers();
+      mockFetchFields.mockResolvedValue({
+        place: {
+          location: { lat: () => 35.2, lng: () => -80.8 },
+          formattedAddress: 'Charlotte, NC',
+          displayName: 'Charlotte',
+        },
+      });
+
+      renderAnalyzePage();
+
+      await waitFor(() => {
+        const container = screen.getByTestId('location-search-places');
+        expect(container.firstElementChild).not.toBeNull();
+      });
+
+      uploadFile(createTestFile());
+
+      const pac = screen.getByTestId('location-search-places').firstElementChild;
+      if (!pac) throw new Error('expected PAC element');
+      dispatchGmpSelect(pac);
+
+      await waitFor(() => {
+        const confirmed = document.getElementById('location-confirmed');
+        expect(confirmed).toHaveTextContent('Charlotte, NC');
+        expect(screen.getByRole('button', { name: 'Analyze My Yard' })).toBeEnabled();
+      });
+    });
+
+    it('falls back to prediction text when fetchFields rejects', async () => {
+      vi.useRealTimers();
+      mockFetchFields.mockRejectedValue(new Error('network error'));
+
+      renderAnalyzePage();
+
+      await waitFor(() => {
+        const container = screen.getByTestId('location-search-places');
+        expect(container.firstElementChild).not.toBeNull();
+      });
+
+      uploadFile(createTestFile());
+
+      const pac = screen.getByTestId('location-search-places').firstElementChild;
+      if (!pac) throw new Error('expected PAC element');
+      dispatchGmpSelect(pac);
+
+      await waitFor(() => {
+        const confirmed = document.getElementById('location-confirmed');
+        expect(confirmed).toHaveTextContent('Charlotte, NC');
+        expect(screen.getByRole('button', { name: 'Analyze My Yard' })).toBeEnabled();
+      });
+    });
+  });
+
   describe('Analyze button', () => {
     it('is disabled until photo and location are provided', async () => {
       vi.useRealTimers();
